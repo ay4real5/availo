@@ -7,6 +7,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import os
@@ -360,15 +361,68 @@ def wait_in_queue(client: httpx.Client, provenance: Provenance, log: logging.Log
     return queue_token
 
 
+def solve_pow(client, provenance: Provenance, log: logging.Logger) -> tuple[str, str]:
+    """Fetch a proof-of-work challenge from the mock and brute-force a nonce so
+    that sha256(challenge + ':' + nonce) starts with `difficulty` hex zeros.
+
+    This mirrors a real hashcash-style gate: the cost is paid client-side, once
+    per session, which a legitimate scraper can afford but a high-volume bot
+    cannot.
+    """
+    resp = mock_request(client, "GET", "/pow", referer=f"{MOCK_URL}/queue/join", provenance=provenance, log=log)
+    resp.raise_for_status()
+    data = resp.json()
+    challenge = data["challenge"]
+    difficulty = int(data["difficulty"])
+    prefix = "0" * difficulty
+    started = time.time()
+    nonce = 0
+    while True:
+        digest = hashlib.sha256(f"{challenge}:{nonce}".encode()).hexdigest()
+        if digest.startswith(prefix):
+            break
+        nonce += 1
+    log.info(f"proof-of-work solved (difficulty={difficulty}, nonce={nonce}, {time.time() - started:.2f}s)")
+    return challenge, str(nonce)
+
+
 def login(client: httpx.Client, queue_token: str, provenance: Provenance, log: logging.Logger, licence: str | None = None) -> str:
     license_number = licence or _dvla_licence()
+    pow_challenge, pow_nonce = solve_pow(client, provenance, log)
     resp = mock_request(
         client, "POST", "/login",
-        body={"license_number": license_number, "queue_token": queue_token},
+        body={
+            "license_number": license_number,
+            "queue_token": queue_token,
+            "pow_challenge": pow_challenge,
+            "pow_nonce": pow_nonce,
+        },
         referer=f"{MOCK_URL}/queue/join",
         provenance=provenance,
         log=log,
     )
+    # The challenge is single-use and time-limited; if it was rejected, solve a
+    # fresh one and retry once.
+    if resp.status_code == 403:
+        try:
+            err = resp.json().get("error", "")
+        except Exception:
+            err = ""
+        if err == "pow_required":
+            log.warning("proof-of-work rejected — solving a fresh challenge and retrying")
+            pow_challenge, pow_nonce = solve_pow(client, provenance, log)
+            resp = mock_request(
+                client, "POST", "/login",
+                body={
+                    "license_number": license_number,
+                    "queue_token": queue_token,
+                    "pow_challenge": pow_challenge,
+                    "pow_nonce": pow_nonce,
+                },
+                referer=f"{MOCK_URL}/queue/join",
+                provenance=provenance,
+                log=log,
+            )
     resp.raise_for_status()
     data = resp.json()
     session_token = data["session_token"]
@@ -440,6 +494,14 @@ def search_slots(client: httpx.Client, centre: str, provenance: Provenance, log:
         log.warning(f"search failed: {resp.status_code}")
         return []
     slots = resp.json().get("slots", [])
+    # Honeypot defence: the hardened mock injects invisible decoy slots
+    # (visible=false) that a real candidate's browser would never render. Only a
+    # naive bot books one, which gets the IP blocked — so we drop them outright.
+    visible = [s for s in slots if s.get("visible", True)]
+    decoys = len(slots) - len(visible)
+    if decoys:
+        log.info(f"{centre}: ignored {decoys} honeypot/decoy slot(s)")
+    slots = visible
     log.info(f"{centre}: found {len(slots)} slots (window={search_days}d)")
     return slots
 
@@ -499,7 +561,8 @@ def book_for_user(
         log.warning(f"skipping user {user_id}: missing licence or payment token")
         return None
 
-    candidates = [s for s in slots if _earlier_than_target(s, target)]
+    # Never act on honeypot decoys, and only book slots that beat the target.
+    candidates = [s for s in slots if s.get("visible", True) and _earlier_than_target(s, target)]
     if not candidates:
         log.info(f"user {user_id}: no slot earlier than their target date — skipping")
         return None
@@ -520,6 +583,28 @@ def book_for_user(
 
         for slot in candidates[:5]:  # retry other slots on vanish
             resp = mock_request(client, "POST", "/book", body={"slot_id": slot["id"]}, provenance=provenance, log=log)
+            # The hardened mock can issue a probabilistic step-up challenge at
+            # booking time even for a clean session — solve it and retry once.
+            if resp.status_code == 403:
+                try:
+                    err = resp.json().get("error", "")
+                    data = resp.json()
+                except Exception:
+                    err, data = "", {}
+                if err == "captcha_required":
+                    provenance.captcha_hit = True
+                    if _solve_captcha(client, data.get("challenge", ""), data.get("difficulty", "standard"),
+                                      provenance.ip_used, provenance, log):
+                        provenance.captcha_hit = False
+                        human_delay(600, 1400)
+                        resp = mock_request(client, "POST", "/book", body={"slot_id": slot["id"]}, provenance=provenance, log=log)
+                    else:
+                        log.warning(f"book step-up challenge not solved for user {user_id}")
+                        return None
+                elif err == "honeypot_tripped":
+                    provenance.ip_blocked = True
+                    log.error(f"honeypot tripped while booking for user {user_id} — IP blocked")
+                    return None
             if resp.status_code == 409:
                 provenance.slot_vanish_retries += 1
                 log.warning(f"slot {slot['id']} vanished — trying next (retry {provenance.slot_vanish_retries})")
