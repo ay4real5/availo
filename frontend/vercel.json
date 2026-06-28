@@ -5,7 +5,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://availo-backend.onrender.com/api/:path*"
+      "destination": "https://availo-backend-4dbx.onrender.com/api/:path*"
     }
   ]
 }
