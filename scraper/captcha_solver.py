@@ -20,27 +20,52 @@ TWOCAPTCHA_API_KEY = os.environ.get("TWOCAPTCHA_API_KEY", "")
 TWOCAPTCHA_TIMEOUT = float(os.environ.get("TWOCAPTCHA_TIMEOUT", "120"))
 
 
-def _solve_with_2captcha(challenge: str, sitekey: str | None = None, url: str | None = None) -> dict[str, Any] | None:
+# Maps a CAPTCHA family to the 2captcha "method" and the field carrying the
+# site key. Lets one wrapper handle reCAPTCHA v2/v3, hCaptcha and Cloudflare
+# Turnstile — the three challenges a DVSA-class site is most likely to deploy.
+_PROVIDER_METHODS = {
+    "recaptcha": ("userrecaptcha", "googlekey"),
+    "hcaptcha": ("hcaptcha", "sitekey"),
+    "turnstile": ("turnstile", "sitekey"),
+}
+
+
+def _solve_with_2captcha(
+    challenge: str,
+    sitekey: str | None = None,
+    url: str | None = None,
+    captcha_type: str | None = None,
+) -> dict[str, Any] | None:
     """Integration point for a real CAPTCHA-solving provider (2captcha).
 
     Returns a solver result dict on success, or None to fall back to simulation.
     This is a thin, provider-agnostic wrapper: swap the endpoints/payload to use
     Anti-Captcha, CapMonster, etc. Requires TWOCAPTCHA_API_KEY to be set.
+
+    ``captcha_type`` selects the challenge family ("recaptcha" | "hcaptcha" |
+    "turnstile"); when omitted it is inferred from whether a site key is present.
     """
     if not TWOCAPTCHA_API_KEY:
         return None
+    # Pick the provider method/keyfield for the challenge family.
+    if captcha_type is None:
+        captcha_type = "recaptcha" if sitekey else "text"
+    method, key_field = _PROVIDER_METHODS.get(captcha_type, ("post", None))
     try:
         # 1. Submit the challenge.
+        payload: dict[str, Any] = {
+            "key": TWOCAPTCHA_API_KEY,
+            "method": method,
+            "pageurl": url or MOCK_URL,
+            "json": 1,
+        }
+        if key_field and sitekey:
+            payload[key_field] = sitekey
+        if method == "post":
+            payload["textcaptcha"] = challenge
         submit = httpx.post(
             "https://2captcha.com/in.php",
-            data={
-                "key": TWOCAPTCHA_API_KEY,
-                "method": "userrecaptcha" if sitekey else "post",
-                "googlekey": sitekey or "",
-                "pageurl": url or MOCK_URL,
-                "json": 1,
-                "textcaptcha": challenge if not sitekey else "",
-            },
+            data=payload,
             timeout=30.0,
         ).json()
         if submit.get("status") != 1:
@@ -68,13 +93,19 @@ def _solve_with_2captcha(challenge: str, sitekey: str | None = None, url: str | 
         return None
 
 
-def solve_challenge(challenge: str, sitekey: str | None = None, url: str | None = None) -> dict[str, Any]:
+def solve_challenge(
+    challenge: str,
+    sitekey: str | None = None,
+    url: str | None = None,
+    captcha_type: str | None = None,
+) -> dict[str, Any]:
     """Solve a CAPTCHA challenge.
 
     Uses a real provider (2captcha) when TWOCAPTCHA_API_KEY is configured;
-    otherwise simulates a solve that the mock site accepts.
+    otherwise simulates a solve that the mock site accepts. ``captcha_type``
+    selects the challenge family ("recaptcha" | "hcaptcha" | "turnstile").
     """
-    real = _solve_with_2captcha(challenge, sitekey=sitekey, url=url)
+    real = _solve_with_2captcha(challenge, sitekey=sitekey, url=url, captcha_type=captcha_type)
     if real:
         return real
     time.sleep(SOLVER_DELAY_SECONDS)
@@ -96,8 +127,13 @@ def submit_solution(challenge: str, token: str) -> bool:
         return False
 
 
-def solve_and_submit(challenge: str) -> dict[str, Any]:
+def solve_and_submit(
+    challenge: str,
+    sitekey: str | None = None,
+    url: str | None = None,
+    captcha_type: str | None = None,
+) -> dict[str, Any]:
     """Solve the challenge and submit it. Return the solver result."""
-    result = solve_challenge(challenge)
+    result = solve_challenge(challenge, sitekey=sitekey, url=url, captcha_type=captcha_type)
     result["accepted"] = submit_solution(challenge, result["token"])
     return result
