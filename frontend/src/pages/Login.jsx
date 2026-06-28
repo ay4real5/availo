@@ -21,10 +21,17 @@ export default function Login({ onSuccess, onRegisterClick }) {
     if (Object.keys(errs).length) { setErrors(errs); return; }
     setLoading(true);
     try {
-      const data = await apiPost("/api/auth/login", { email: form.email, password: form.password });
+      const data = await apiPost("/api/auth/login", { email: form.email.trim().toLowerCase(), password: form.password.trim() });
       onSuccess(data.user, data.token);
     } catch (err) {
-      setServerError("Email or password is incorrect");
+      const msg = err?.message || "";
+      if (/invalid_credentials|incorrect/i.test(msg)) {
+        setServerError("Email or password is incorrect");
+      } else if (/failed to fetch|networkerror|load failed/i.test(msg)) {
+        setServerError("Could not reach the server. It may be waking up — wait ~30s and try again.");
+      } else {
+        setServerError(msg || "Sign in failed. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
