@@ -53,6 +53,10 @@ stats = {
     "searches": 0,
     "bookings": 0,
     "payments": 0,
+    "pow_issued": 0,
+    "pow_failed": 0,
+    "honeypot_trips": 0,
+    "timing_flags": 0,
 }
 flagged_ips: set[str] = set()
 rate_limit: dict[str, list[float]] = {}
@@ -76,6 +80,23 @@ IP_BLOCK_TRAP_HITS = 2          # block IP after this many bot-trap hits
 SLOT_VANISH_PROBABILITY = 0.15  # chance a slot disappears between search and book
 SUSPICIOUS_INTERVAL_MS = 300    # requests faster than this (ms) are flagged
 
+# ── DVSA-grade hardening (configurable) ────────────────────────────────────
+# Proof-of-work: a client must brute-force a nonce before it can sign in, which
+# imposes a real per-session compute cost that throttles cheap, high-volume
+# automation (the way hashcash-style gates do on production booking systems).
+POW_DIFFICULTY = int(os.environ.get("POW_DIFFICULTY", "4"))      # leading hex zeros
+POW_TTL_SECONDS = int(os.environ.get("POW_TTL_SECONDS", "180"))
+# Honeypot: invisible decoy slots are injected into search results. A real
+# browser hides them (visible=false); only a bot would try to book one.
+HONEYPOT_PROBABILITY = float(os.environ.get("HONEYPOT_PROBABILITY", "0.6"))
+# Probabilistic step-up: even a clean session is challenged at booking time.
+BOOK_CHALLENGE_PROBABILITY = float(os.environ.get("BOOK_CHALLENGE_PROBABILITY", "0.35"))
+# Behavioural timing: a machine-regular request cadence (low coefficient of
+# variation) at machine speed is flagged the way real behavioural stacks do.
+TIMING_MIN_SAMPLES = int(os.environ.get("TIMING_MIN_SAMPLES", "6"))
+TIMING_CV_THRESHOLD = float(os.environ.get("TIMING_CV_THRESHOLD", "0.08"))
+TIMING_FAST_MS = float(os.environ.get("TIMING_FAST_MS", "1500"))
+
 # Per-IP: number of bot-trap hits
 bot_trap_hits: dict[str, int] = {}
 # Per-IP: timestamp of last request (for timing fingerprint)
@@ -86,6 +107,15 @@ captcha_solves: dict[str, int] = {}
 blocked_ips: set[str] = set()
 # Per-IP: cumulative device-fingerprint risk score (persisted)
 fingerprint_scores: dict[str, float] = {}
+# Proof-of-work challenges already redeemed (single-use, anti-replay)
+used_pow_challenges: set[str] = set()
+# Per-IP: recent inter-request intervals (ms) for behavioural timing analysis
+request_intervals: dict[str, list[float]] = {}
+_timing_last_seen: dict[str, float] = {}
+# IDs of honeypot/decoy slots handed out in search results (booking one = block)
+decoy_slot_ids: set[str] = set()
+# Per-IP: number of step-up booking challenges already issued (bounded)
+book_challenge_issued: dict[str, int] = {}
 
 
 # ── Persistence ───────────────────────────────────────────────────────────────
@@ -355,6 +385,87 @@ class Handler(BaseHTTPRequestHandler):
             "attempt": solves + 1,
         })
 
+    # ── DVSA-grade hardening helpers ──────────────────────────────────────
+    def _make_pow_challenge(self) -> tuple[str, int]:
+        """Issue a single-use, signed, expiring proof-of-work challenge."""
+        value = f"{int(time.time())}:{POW_DIFFICULTY}:{secrets.token_hex(8)}"
+        return _sign(value), POW_DIFFICULTY
+
+    def _verify_pow(self, challenge, nonce) -> tuple[bool, str]:
+        """Verify a proof-of-work solution: valid signature, not expired, not
+        replayed, and sha256(challenge:nonce) has the required leading zeros."""
+        if not challenge or nonce in (None, ""):
+            return False, "missing"
+        if not _verify_signed(challenge):
+            return False, "bad_signature"
+        if challenge in used_pow_challenges:
+            return False, "replayed"
+        value = challenge.rpartition(".")[0]
+        try:
+            ts_s, diff_s, _rand = value.split(":", 2)
+            ts, difficulty = int(ts_s), int(diff_s)
+        except Exception:
+            return False, "malformed"
+        if time.time() - ts > POW_TTL_SECONDS:
+            return False, "expired"
+        digest = hashlib.sha256(f"{challenge}:{nonce}".encode()).hexdigest()
+        if not digest.startswith("0" * difficulty):
+            return False, "unsolved"
+        used_pow_challenges.add(challenge)
+        return True, "ok"
+
+    def _timing_anomaly(self, ip: str) -> bool:
+        """Flag machine-regular cadence: enough samples, fast, and near-zero
+        variance. Humans (and a well-jittered scraper) are noisy and pass."""
+        now_ts = time.time()
+        prev = _timing_last_seen.get(ip)
+        _timing_last_seen[ip] = now_ts
+        if prev is None:
+            return False
+        arr = request_intervals.setdefault(ip, [])
+        arr.append((now_ts - prev) * 1000.0)
+        if len(arr) > 12:
+            del arr[0]
+        if len(arr) < TIMING_MIN_SAMPLES:
+            return False
+        mean = sum(arr) / len(arr)
+        if mean <= 0 or mean > TIMING_FAST_MS:
+            return False  # slow enough to be plausibly human
+        std = (sum((x - mean) ** 2 for x in arr) / len(arr)) ** 0.5
+        if std / mean < TIMING_CV_THRESHOLD:
+            stats["timing_flags"] += 1
+            return True
+        return False
+
+    def _session_bound_ok(self, sess: dict, ip: str) -> bool:
+        """A session is bound to the IP + User-Agent it was created with; any
+        drift mid-session looks like a stolen/replayed token and is rejected."""
+        if sess.get("bound_ip") and sess["bound_ip"] != ip:
+            return False
+        if sess.get("bound_ua") and sess["bound_ua"] != self.headers.get("User-Agent", ""):
+            return False
+        return True
+
+    def _decorate_and_inject(self, centre: str, slots: list[dict]) -> list[dict]:
+        """Tag real slots visible and sprinkle in an invisible honeypot decoy.
+        A real candidate's browser never renders (so never books) the decoy."""
+        for s in slots:
+            s.setdefault("visible", True)
+        if slots and random.random() < HONEYPOT_PROBABILITY:
+            decoy_dt = (_now() + timedelta(days=random.randint(1, 3))).replace(
+                hour=8, minute=10, second=0, microsecond=0
+            )
+            decoy_id = f"{centre.lower().replace(' ', '-')}-decoy-{secrets.token_hex(4)}"
+            decoy_slot_ids.add(decoy_id)
+            slots = slots + [{
+                "id": decoy_id,
+                "centre": centre,
+                "datetime": _iso(decoy_dt),
+                "visible": False,  # hidden in the real UI; only a bot books it
+            }]
+            random.shuffle(slots)
+        return slots
+
     def _common(self):
         parsed = urlparse(self.path)
         params = parse_qs(parsed.query)
@@ -373,10 +484,12 @@ class Handler(BaseHTTPRequestHandler):
             if action == "block":
                 self._json(403, {"error": "ip_blocked", "message": "Your access has been permanently blocked"})
                 return None
+            if self._timing_anomaly(ip):
+                flagged_ips.add(ip)
         if not self._check_rate_limit(ip):
             self._json(429, {"error": "rate_limited", "message": "Too many requests", "retry_after": 5})
             return None
-        if self._captcha_required(ip) and parsed.path not in ("/health", "/captcha/solve"):
+        if self._captcha_required(ip) and parsed.path not in ("/health", "/captcha/solve", "/pow"):
             self._require_captcha(ip)
             return None
         return parsed, params, ip
@@ -466,6 +579,15 @@ class Handler(BaseHTTPRequestHandler):
             today = _now()
             slots = _get_or_create_slots(centre, _iso(today), _iso(today + timedelta(days=14)))
             self._json(200, {"centre": centre, "slots": slots})
+        elif path == "/pow":
+            challenge, difficulty = self._make_pow_challenge()
+            stats["pow_issued"] += 1
+            self._json(200, {
+                "challenge": challenge,
+                "difficulty": difficulty,
+                "algorithm": "sha256",
+                "instructions": "submit pow_nonce such that sha256(challenge + ':' + nonce) begins with `difficulty` hex zeros",
+            })
         elif path == "/captcha":
             self._require_captcha(ip)
         elif path == "/bot-trap":
@@ -519,6 +641,8 @@ class Handler(BaseHTTPRequestHandler):
         if self._apply_fingerprint_risk(ip) == "block":
             self._json(403, {"error": "ip_blocked", "message": "Your access has been permanently blocked"})
             return
+        if self._timing_anomaly(ip):
+            flagged_ips.add(ip)
         if not self._check_rate_limit(ip):
             self._json(429, {"error": "rate_limited", "message": "Too many requests", "retry_after": 5})
             return
@@ -670,6 +794,20 @@ class Handler(BaseHTTPRequestHandler):
             if self._queue_position(queue_token) != 0:
                 self._json(403, {"error": "queue_not_ready", "message": "Wait for the queue"})
                 return
+            # Proof-of-work gate: brute-forced nonce required before sign-in.
+            pow_challenge = body.get("pow_challenge") or self.headers.get("x-pow-challenge")
+            pow_nonce = body.get("pow_nonce") or self.headers.get("x-pow-nonce")
+            pow_ok, pow_reason = self._verify_pow(pow_challenge, pow_nonce)
+            if not pow_ok:
+                stats["pow_failed"] += 1
+                self._json(403, {
+                    "error": "pow_required",
+                    "reason": pow_reason,
+                    "message": "Proof-of-work required before sign-in",
+                    "difficulty": POW_DIFFICULTY,
+                    "pow_endpoint": "/pow",
+                })
+                return
             stats["logins"] += 1
             token = _new_signed_token()
             csrf = _new_signed_token()
@@ -679,6 +817,8 @@ class Handler(BaseHTTPRequestHandler):
                 "license_number": license_number,
                 "created_at": _now(),
                 "bookings": [],
+                "bound_ip": ip,
+                "bound_ua": self.headers.get("User-Agent", ""),
             }
             self._json(200, {"session_token": token, "csrf_token": csrf, "authenticated": True})
             return
@@ -689,6 +829,9 @@ class Handler(BaseHTTPRequestHandler):
             if not sess:
                 self._json(401, {"error": "unauthenticated"})
                 return
+            if not self._session_bound_ok(sess, ip):
+                self._json(401, {"error": "session_binding_mismatch", "message": "Session does not match its original device/IP"})
+                return
             centre = body.get("centre", "Bolton")
             from_date = body.get("from_date")
             to_date = body.get("to_date")
@@ -698,7 +841,8 @@ class Handler(BaseHTTPRequestHandler):
                 to_date = _iso(today + timedelta(days=14))
             stats["searches"] += 1
             slots = _get_or_create_slots(centre, from_date, to_date)
-            self._json(200, {"centre": centre, "slots": slots, "count": len(slots)})
+            slots = self._decorate_and_inject(centre, slots)
+            self._json(200, {"centre": centre, "slots": slots, "count": len([s for s in slots if s.get("visible", True)])})
             return
 
         if path == "/book":
@@ -710,9 +854,27 @@ class Handler(BaseHTTPRequestHandler):
             if not self._csrf_ok(sess, body):
                 self._json(403, {"error": "csrf_failed", "message": "Missing or invalid CSRF token"})
                 return
+            if not self._session_bound_ok(sess, ip):
+                self._json(401, {"error": "session_binding_mismatch", "message": "Session does not match its original device/IP"})
+                return
             slot_id = body.get("slot_id")
             if not slot_id:
                 self._json(400, {"error": "missing_slot_id"})
+                return
+            # Honeypot: a hidden decoy slot is never rendered to a real candidate,
+            # so any attempt to book one is conclusively a bot → hard block.
+            if slot_id in decoy_slot_ids:
+                stats["honeypot_trips"] += 1
+                blocked_ips.add(ip)
+                _save_state()
+                self._json(403, {"error": "honeypot_tripped", "message": "Interaction with a hidden trap element — access blocked"})
+                return
+            # Probabilistic step-up challenge (bounded to once per IP) — even a
+            # clean session is occasionally asked to re-verify before booking.
+            if random.random() < BOOK_CHALLENGE_PROBABILITY and book_challenge_issued.get(ip, 0) < 1:
+                book_challenge_issued[ip] = 1
+                flagged_ips.add(ip)
+                self._require_captcha(ip)
                 return
             # Slot scarcity: randomly vanish slots between search and book
             if random.random() < SLOT_VANISH_PROBABILITY:
@@ -748,6 +910,9 @@ class Handler(BaseHTTPRequestHandler):
             sess = self._session(session_token)
             if not sess:
                 self._json(401, {"error": "unauthenticated", "message": "Session expired; please log in again"})
+                return
+            if not self._session_bound_ok(sess, ip):
+                self._json(401, {"error": "session_binding_mismatch", "message": "Session does not match its original device/IP"})
                 return
             if not self._csrf_ok(sess, body):
                 self._json(403, {"error": "csrf_failed", "message": "Missing or invalid CSRF token"})
