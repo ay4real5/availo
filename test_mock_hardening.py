@@ -10,19 +10,78 @@ well-behaved client still completes the journey:
   6. Booking a hidden honeypot/decoy slot blocks the IP
   7. A session is bound to its IP — replaying it from another IP is rejected
 """
+import atexit
 import hashlib
 import json
 import os
 import random
 import re
+import socket
+import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 
-MOCK = "http://localhost:8000"
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "scraper"))
+
+
+def _free_port():
+    s = socket.socket()
+    s.bind(("127.0.0.1", 0))
+    port = s.getsockname()[1]
+    s.close()
+    return port
+
+
+def start_isolated_mock():
+    """Spin up a private mock with empty state so the suite is deterministic and
+    isolated. Sharing an externally-running mock makes the tests flaky: prior
+    scrape traffic leaves the global queue deep and per-IP rate windows full, so
+    a legitimate journey can no longer be completed without tripping the very
+    rate limits under test. A fresh instance sidesteps that entirely.
+
+    Set MOCK_URL to point at an already-running mock and skip the spawn."""
+    existing = os.environ.get("MOCK_URL")
+    if existing:
+        return existing.rstrip("/"), None
+    port = _free_port()
+    state = os.path.join(tempfile.gettempdir(), f"mock_state_test_{port}.json")
+    if os.path.exists(state):
+        os.remove(state)
+    env = {**os.environ, "MOCK_PORT": str(port), "MOCK_HOST": "127.0.0.1", "MOCK_STATE_FILE": state}
+    server_py = os.path.join(os.path.dirname(__file__), "scraper", "mock_site", "server.py")
+    proc = subprocess.Popen([sys.executable, server_py], env=env,
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    url = f"http://127.0.0.1:{port}"
+    for _ in range(50):
+        try:
+            with urllib.request.urlopen(f"{url}/health", timeout=1) as r:
+                if r.status == 200:
+                    break
+        except Exception:
+            time.sleep(0.1)
+    else:
+        proc.terminate()
+        raise RuntimeError("isolated mock did not become healthy")
+
+    def _cleanup():
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except Exception:
+            proc.kill()
+        if os.path.exists(state):
+            os.remove(state)
+
+    atexit.register(_cleanup)
+    return url, proc
+
+
+MOCK, _MOCK_PROC = start_isolated_mock()
+print(f"[harness] testing against {MOCK}")
 
 
 def get_html(path, headers=None):
@@ -73,6 +132,9 @@ def call(method, path, headers=None, body=None):
     h = {"Content-Type": "application/json"}
     if headers:
         h.update(headers)
+    # Drop unset headers so a None value never crashes urllib (a missing token
+    # should surface as the server's auth error, not a client-side TypeError).
+    h = {k: v for k, v in h.items() if v is not None}
     data = json.dumps(body).encode() if body else None
     # Jittered pause so we stay well clear of the mock's timing fingerprint
     # (too-fast and too-regular cadences are both flagged).
@@ -110,12 +172,40 @@ def solve_pow(headers):
     return challenge, str(nonce)
 
 
+def warm(headers):
+    """Land on a public page first, the way a real visitor does, so the journey
+    is not penalised as a cold start. The landing page is HTML, not JSON."""
+    get_html("/", headers=headers)
+
+
+def _captcha_token(challenge, difficulty):
+    """Build a token the mock accepts for the issued challenge family."""
+    if difficulty == "hard":
+        return "solved-mock-captcha-challenge-hard-" + hashlib.sha256(challenge.encode()).hexdigest()
+    return "solved-mock-captcha-challenge-" + (challenge.rsplit("-", 1)[-1] or "ok")
+
+
+def solved_call(method, path, headers=None, body=None):
+    """Like call(), but if the mock raises a step-up CAPTCHA, solve it and retry
+    once — exactly what the real scraper does — so probabilistic/rate challenges
+    don't derail a legitimate journey."""
+    s, d = call(method, path, headers=headers, body=body)
+    if s == 403 and isinstance(d, dict) and d.get("error") == "captcha_required":
+        token = _captcha_token(d.get("challenge", ""), d.get("difficulty", "standard"))
+        call("POST", "/captcha/solve", headers=headers, body={"token": token})
+        s, d = call(method, path, headers=headers, body=body)
+    return s, d
+
+
 def join_queue(headers):
-    call("GET", "/queue/join", headers=headers)
-    s, qj = call("GET", "/queue/join", headers=headers)
+    warm(headers)
+    solved_call("GET", "/queue/join", headers=headers)
+    s, qj = solved_call("GET", "/queue/join", headers=headers)
     qtoken = qj["queue_token"]
-    for _ in range(8):
-        s, qs = call("GET", f"/queue/status?token={qtoken}", headers=headers)
+    # Poll until the server admits us. Against the isolated mock the queue stays
+    # shallow, so this drains well within the per-IP rate budget.
+    for _ in range(25):
+        s, qs = solved_call("GET", f"/queue/status?token={qtoken}", headers=headers)
         if qs.get("allowed"):
             break
     return qtoken
@@ -126,7 +216,7 @@ def full_login(ip, licence="SMITH123456AB"):
     h = {**CLEAN, "x-faked-ip": ip}
     qtoken = join_queue(h)
     challenge, nonce = solve_pow(h)
-    s, d = call("POST", "/login", headers=h, body={
+    s, d = solved_call("POST", "/login", headers=h, body={
         "license_number": licence,
         "queue_token": qtoken,
         "pow_challenge": challenge,
@@ -164,8 +254,11 @@ s, login, h = full_login("9.9.9.2")
 session = login.get("session_token")
 csrf = login.get("csrf_token")
 check("PoW login returns signed session + csrf", bool(session and "." in session and csrf))
-s, d = call("POST", "/book", headers={**h, "x-session-token": session}, body={"slot_id": "bolton-x"})
-check("book without CSRF -> 403 csrf_failed", s == 403 and d.get("error") == "csrf_failed")
+if session:
+    s, d = call("POST", "/book", headers={**h, "x-session-token": session}, body={"slot_id": "bolton-x"})
+    check("book without CSRF -> 403 csrf_failed", s == 403 and d.get("error") == "csrf_failed")
+else:
+    check("book without CSRF -> 403 csrf_failed", False)
 
 print("Test 4: bot fingerprint gets blocked")
 bot_headers = {"User-Agent": "python-httpx/0.28", "x-faked-ip": "7.7.7.7"}
@@ -264,7 +357,6 @@ s, body, _ = post_form("/login", {
 check("motionless browser login (human_signal=0) -> 403", s == 403)
 
 print("Test 12: fleet-wide detection circuit breaker (#4)")
-import tempfile
 os.environ["DETECTION_CB_STATE_FILE"] = os.path.join(tempfile.gettempdir(), f"cb_{random.randint(0,99999)}.json")
 import circuit
 circuit.STATE_FILE = os.environ["DETECTION_CB_STATE_FILE"]
