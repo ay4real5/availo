@@ -97,6 +97,7 @@ CREATE TABLE IF NOT EXISTS scraper_jobs (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 ALTER TABLE scraper_jobs ADD COLUMN IF NOT EXISTS source_meta JSONB DEFAULT '{}';
+ALTER TABLE scraper_jobs ADD COLUMN IF NOT EXISTS test_centre TEXT;
 
 -- ── available_slots ──────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS available_slots (
@@ -112,6 +113,13 @@ CREATE TABLE IF NOT EXISTS available_slots (
   rule_meta JSONB DEFAULT '{}',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+-- Guards so an older available_slots (created by a previous run) gains any
+-- missing columns before the indexes below reference them.
+ALTER TABLE available_slots ADD COLUMN IF NOT EXISTS test_centre TEXT;
+ALTER TABLE available_slots ADD COLUMN IF NOT EXISTS user_id UUID;
+ALTER TABLE available_slots ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending';
+ALTER TABLE available_slots ADD COLUMN IF NOT EXISTS source_meta JSONB DEFAULT '{}';
+ALTER TABLE available_slots ADD COLUMN IF NOT EXISTS rule_meta JSONB DEFAULT '{}';
 
 -- ── bookings ─────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS bookings (
@@ -125,6 +133,9 @@ CREATE TABLE IF NOT EXISTS bookings (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS test_centre TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'confirmed';
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS user_id UUID;
 
 -- ── bot_trap_visits ──────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS bot_trap_visits (
@@ -146,6 +157,7 @@ CREATE TABLE IF NOT EXISTS notification_queue (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE notification_queue ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending';
 
 -- ── audit_log ────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS audit_log (
