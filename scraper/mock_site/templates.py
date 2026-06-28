@@ -194,7 +194,7 @@ def page_queue(position: int, token: str, estimated_seconds: int) -> str:
     return _base("Waiting room", body)
 
 
-def page_login(token: str, error: str = "") -> str:
+def page_login(token: str, error: str = "", js_seed: str = "") -> str:
     error_html = f"""
     <div class="govuk-error-summary" data-module="govuk-error-summary">
       <div role="alert">
@@ -212,8 +212,15 @@ def page_login(token: str, error: str = "") -> str:
       <div class="govuk-grid-column-two-thirds">
         <h1 class="govuk-heading-xl">Enter your details</h1>
         {error_html}
-        <form method="POST" action="/login" novalidate>
+        <form method="POST" action="/login" novalidate id="login-form">
           <input type="hidden" name="queue_token" value="{token}">
+          <!-- JS challenge + behavioural signal: a real browser runs this
+               script (computing js_token from the seed) and a real candidate
+               generates pointer/scroll events (human_signal). A scriptless or
+               motionless client leaves these empty and is rejected. -->
+          <input type="hidden" name="js_seed" id="js_seed" value="{js_seed}">
+          <input type="hidden" name="js_token" id="js_token" value="">
+          <input type="hidden" name="human_signal" id="human_signal" value="0">
 
           <div class="govuk-form-group {'govuk-form-group--error' if error else ''}">
             <label class="govuk-label govuk-label--m" for="licence">
@@ -256,7 +263,27 @@ def page_login(token: str, error: str = "") -> str:
           <button type="submit" class="govuk-button" data-module="govuk-button">Continue</button>
         </form>
       </div>
-    </div>"""
+    </div>
+    <script>
+      (function () {{
+        // --- JS challenge: derive js_token from the server-issued seed. ---
+        var seedField = document.getElementById('js_seed');
+        var seed = seedField ? seedField.value : '';
+        var n = parseInt((seed.split('.')[0] || '0'), 10) || 0;
+        // Must match the server's recomputation exactly.
+        var token = (n * 7919 + 104729) % 1000000007;
+        document.getElementById('js_token').value = String(token);
+
+        // --- Behavioural signal: count genuine pointer/scroll/key activity. ---
+        var signal = 0;
+        var sig = document.getElementById('human_signal');
+        function bump(weight) {{ signal += weight; if (sig) sig.value = String(signal); }}
+        document.addEventListener('mousemove', function () {{ bump(1); }}, {{ passive: true }});
+        document.addEventListener('scroll', function () {{ bump(2); }}, {{ passive: true }});
+        document.addEventListener('keydown', function () {{ bump(2); }});
+        document.addEventListener('click', function () {{ bump(2); }}, {{ passive: true }});
+      }})();
+    </script>"""
     return _base("Sign in", body)
 
 

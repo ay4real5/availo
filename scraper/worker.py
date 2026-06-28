@@ -20,6 +20,7 @@ from typing import Any
 
 import httpx
 
+import circuit
 from captcha_solver import solve_and_submit
 from proxy_rotator import pick_proxy, proxy_for_httpx, sticky_proxy, record_proxy_result
 from fingerprint import build_identity
@@ -337,6 +338,29 @@ class QueueTimeoutError(Exception):
     pass
 
 
+def warm_session(client, provenance: Provenance, log: logging.Logger) -> None:
+    """Warm the session like a real visitor before touching any API.
+
+    A genuine candidate lands on the homepage, reads for a moment, maybe opens a
+    secondary page, and only then proceeds. The hardened mock flags sessions that
+    jump straight to /login or /search from a cold IP (no prior landing). Warming
+    also lets the session accumulate cookies the way a browser would.
+    """
+    mock_request(client, "GET", "/", referer=None, provenance=provenance, log=log)
+    human_delay(700, 1800)
+    # With some probability, browse a secondary informational page first.
+    if random.random() < 0.6:
+        for path in ("/help", "/about", "/"):
+            try:
+                r = mock_request(client, "GET", path, referer=f"{MOCK_URL}/", provenance=provenance, log=log)
+                if r.status_code == 200:
+                    human_delay(500, 1400)
+                    break
+            except Exception:
+                continue
+    log.info("session warmed (landing + idle)")
+
+
 def wait_in_queue(client: httpx.Client, provenance: Provenance, log: logging.Logger) -> str:
     resp = mock_request(client, "GET", "/queue/join", referer=f"{MOCK_URL}/", provenance=provenance, log=log)
     resp.raise_for_status()
@@ -435,12 +459,28 @@ def login(client: httpx.Client, queue_token: str, provenance: Provenance, log: l
     return session_token
 
 
-def _solve_captcha(client: httpx.Client, challenge: str, difficulty: str, ip: str, provenance: Provenance, log: logging.Logger) -> bool:
-    """Attempt to solve a CAPTCHA challenge, handling escalated difficulty."""
-    log.info(f"CAPTCHA required — difficulty={difficulty} challenge={challenge}")
+def _solve_captcha(
+    client: httpx.Client,
+    challenge: str,
+    difficulty: str,
+    ip: str,
+    provenance: Provenance,
+    log: logging.Logger,
+    captcha_type: str | None = None,
+    sitekey: str | None = None,
+) -> bool:
+    """Attempt to solve a CAPTCHA challenge, handling escalated difficulty.
+
+    When the mock advertises a real challenge family (``captcha_type`` /
+    ``sitekey``) and a provider key is configured, the solve is routed through
+    the real CAPTCHA service; otherwise the simulated solver is used.
+    """
+    log.info(f"CAPTCHA required — difficulty={difficulty} type={captcha_type or 'mock'} challenge={challenge}")
     if difficulty == "hard":
         # Hard challenge: solver must produce a token containing 'hard' and >= 32 chars
-        base = solve_and_submit(challenge).get("token", f"solved-mock-captcha-challenge-hard-{challenge}")
+        base = solve_and_submit(
+            challenge, sitekey=sitekey, url=f"{MOCK_URL}/search", captcha_type=captcha_type,
+        ).get("token", f"solved-mock-captcha-challenge-hard-{challenge}")
         solve_token = f"solved-mock-captcha-challenge-hard-{challenge}-{base}"
         solve_token = solve_token[:max(32, len(solve_token))]
     else:
@@ -476,7 +516,12 @@ def search_slots(client: httpx.Client, centre: str, provenance: Provenance, log:
         provenance.captcha_hit = True
         challenge = data.get("challenge", "")
         difficulty = data.get("difficulty", "standard")
-        if _solve_captcha(client, challenge, difficulty, provenance.ip_used, provenance, log):
+        captcha_type = data.get("captcha_type")
+        sitekey = data.get("sitekey")
+        if _solve_captcha(
+            client, challenge, difficulty, provenance.ip_used, provenance, log,
+            captcha_type=captcha_type, sitekey=sitekey,
+        ):
             provenance.captcha_hit = False
             human_delay(800, 1500)
             resp = mock_request(
@@ -678,8 +723,9 @@ def _discover_slots(centre, identity, proxy, provenance, log):
     headers = dict(identity["headers"])
     headers["Accept"] = "application/json, text/html;q=0.9, */*;q=0.8"
     with make_client(headers, proxy) as client:
-        mock_request(client, "GET", "/", provenance=provenance, log=log)
-        human_delay(600, 1400)
+        # Warm the session (landing + idle + optional secondary page) before any
+        # API call, then enter the queue like a real candidate.
+        warm_session(client, provenance, log)
         queue_token = wait_in_queue(client, provenance, log)
         login(client, queue_token, provenance, log)
         human_delay()
@@ -704,6 +750,13 @@ def _discover_slots(centre, identity, proxy, provenance, log):
 
 def scrape_centre(centre: str) -> None:
     log = _make_logger(centre)
+    # Fleet-wide safety valve: if we're being detected across the board, stand
+    # down for a cooldown instead of burning identities/proxies.
+    try:
+        circuit.check()
+    except circuit.CircuitOpenError as e:
+        log.error(f"detection circuit OPEN — standing down for {e.remaining:.0f}s")
+        return
     identity = build_identity()
     proxy_used = pick_proxy()
     ip_used = identity["ip"]
@@ -731,7 +784,10 @@ def scrape_centre(centre: str) -> None:
         if pw.available():
             try:
                 log.info("discovery via real browser (Playwright)")
-                slots = pw.discover_with_browser(centre, ua_used, proxy_used, _dvla_licence(), log, fake_ip=ip_used)
+                slots = pw.discover_with_browser(
+                    centre, ua_used, proxy_used, _dvla_licence(), log,
+                    fake_ip=ip_used, client_meta=identity.get("client_meta"),
+                )
             except Exception as e:
                 log.warning(f"playwright discovery failed ({e}); falling back to curl_cffi")
 
@@ -801,6 +857,11 @@ def scrape_centre(centre: str) -> None:
     else:
         status, error = "success", None
     record_proxy_result(proxy_used, status == "success")
+    # Feed the fleet-wide detection breaker: a blocked/captcha'd run counts as a
+    # detection event; enough of them in the window trips the breaker.
+    cb = circuit.record(detected=status == "blocked")
+    if cb["open"]:
+        log.warning(f"detection circuit tripped (rate={cb['rate']:.0%}) — fleet backing off {cb['remaining']:.0f}s")
     update_job(provenance.job_id, status, len(slots), error)
     log.info(f"job {provenance.job_id} → {status} ({len(slots)} slots, {provenance.slot_vanish_retries} vanish retries)")
 

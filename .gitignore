@@ -19,4 +19,6 @@ venv/
 # Scraper runtime state
 .proxy_state.json
 **/.mock_state.json
+.detection_cb.json
+**/.detection_cb.json
 logs/

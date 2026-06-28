@@ -57,6 +57,9 @@ stats = {
     "pow_failed": 0,
     "honeypot_trips": 0,
     "timing_flags": 0,
+    "js_failed": 0,
+    "geo_flags": 0,
+    "cold_starts": 0,
 }
 flagged_ips: set[str] = set()
 rate_limit: dict[str, list[float]] = {}
@@ -78,7 +81,8 @@ QUEUE_DECAY_PROBABILITY = 0.6
 CAPTCHA_RATE_THRESHOLD = 20
 IP_BLOCK_TRAP_HITS = 2          # block IP after this many bot-trap hits
 SLOT_VANISH_PROBABILITY = 0.15  # chance a slot disappears between search and book
-SUSPICIOUS_INTERVAL_MS = 300    # requests faster than this (ms) are flagged
+SUSPICIOUS_INTERVAL_MS = 300    # requests faster than this (ms) are "fast"
+FAST_BURST_LIMIT = 3            # consecutive fast hops before flagging a burst
 
 # ── DVSA-grade hardening (configurable) ────────────────────────────────────
 # Proof-of-work: a client must brute-force a nonce before it can sign in, which
@@ -96,11 +100,31 @@ BOOK_CHALLENGE_PROBABILITY = float(os.environ.get("BOOK_CHALLENGE_PROBABILITY", 
 TIMING_MIN_SAMPLES = int(os.environ.get("TIMING_MIN_SAMPLES", "6"))
 TIMING_CV_THRESHOLD = float(os.environ.get("TIMING_CV_THRESHOLD", "0.08"))
 TIMING_FAST_MS = float(os.environ.get("TIMING_FAST_MS", "1500"))
+# JS challenge + behavioural biometrics on the browser (HTML) journey: a real
+# browser executes the page script (deriving js_token) and a real candidate
+# produces pointer/scroll events (human_signal). A scriptless/motionless client
+# is rejected.
+HUMAN_SIGNAL_MIN = int(os.environ.get("HUMAN_SIGNAL_MIN", "3"))
+# Geo coherence: a UK residential IP whose browser advertises a non-UK language
+# or timezone is incoherent (real residents send en-GB / Europe-London).
+GEO_MISMATCH_PENALTY = float(os.environ.get("GEO_MISMATCH_PENALTY", "45"))
+# Session warming: jumping straight to a sensitive endpoint from a cold IP (no
+# prior landing-page visit) is mildly suspicious, the way real visitors warm up.
+COLD_START_PENALTY = float(os.environ.get("COLD_START_PENALTY", "15"))
+# IP first-octet -> expected country/languages/timezone (mirrors fingerprint.py).
+GEO_BLOCKS = {
+    86: ("GB", "Europe/London"), 81: ("GB", "Europe/London"),
+    90: ("GB", "Europe/London"), 25: ("GB", "Europe/London"),
+    31: ("GB", "Europe/London"), 51: ("GB", "Europe/London"),
+}
+GEO_EXPECTED_LANG = {"GB": "en"}
 
 # Per-IP: number of bot-trap hits
 bot_trap_hits: dict[str, int] = {}
 # Per-IP: timestamp of last request (for timing fingerprint)
 last_request_time: dict[str, float] = {}
+# Per-IP: run length of consecutive sub-threshold (fast) intervals
+consecutive_fast: dict[str, int] = {}
 # Per-IP: captcha solve count (escalation)
 captcha_solves: dict[str, int] = {}
 # Blocked IPs (persisted across restarts)
@@ -116,6 +140,10 @@ _timing_last_seen: dict[str, float] = {}
 decoy_slot_ids: set[str] = set()
 # Per-IP: number of step-up booking challenges already issued (bounded)
 book_challenge_issued: dict[str, int] = {}
+# IPs that have visited a landing/informational page (session warming signal)
+landed_ips: set[str] = set()
+# IPs already penalised once for a cold start (so the nudge is applied once)
+cold_noted: set[str] = set()
 
 
 # ── Persistence ───────────────────────────────────────────────────────────────
@@ -268,12 +296,18 @@ class Handler(BaseHTTPRequestHandler):
             return True
         if not self.headers.get("Accept-Encoding"):
             return True
-        # Request timing: real humans don't hit endpoints faster than 300ms apart
+        # Request cadence: a single fast hop is normal (a real browser follows a
+        # 302 redirect instantly), so flag only a *sustained* machine-gun burst —
+        # several consecutive sub-threshold intervals in a row.
         now_ts = time.time()
         last = last_request_time.get(ip, 0)
         interval_ms = (now_ts - last) * 1000
         last_request_time[ip] = now_ts
         if last > 0 and interval_ms < SUSPICIOUS_INTERVAL_MS:
+            consecutive_fast[ip] = consecutive_fast.get(ip, 0) + 1
+        else:
+            consecutive_fast[ip] = 0
+        if consecutive_fast.get(ip, 0) >= FAST_BURST_LIMIT:
             stats["bot_traps"] += 1
             return True
         return False
@@ -326,7 +360,34 @@ class Handler(BaseHTTPRequestHandler):
             if ua_os and sec_platform != ua_os:
                 score += 40  # e.g. Windows UA claiming macOS platform
 
+        # Geo coherence: the source IP's country must agree with the soft
+        # locale signals (Accept-Language, advertised timezone). A UK IP whose
+        # browser claims en-US / America-New_York is incoherent.
+        score += self._geo_mismatch(ip)
+
         return min(100.0, score)
+
+    def _geo_mismatch(self, ip: str) -> float:
+        """Penalty for IP<->locale/timezone incoherence (0 if coherent)."""
+        try:
+            first = int(ip.split(".", 1)[0])
+        except Exception:
+            return 0.0
+        expected = GEO_BLOCKS.get(first)
+        if not expected:
+            return 0.0  # unknown range — can't judge
+        country, tz = expected
+        penalty = 0.0
+        accept_lang = (self.headers.get("Accept-Language", "") or "").lower()
+        want_lang = GEO_EXPECTED_LANG.get(country, "")
+        if accept_lang and want_lang and want_lang not in accept_lang:
+            penalty += GEO_MISMATCH_PENALTY
+        client_tz = self.headers.get("x-client-timezone", "")
+        if client_tz and client_tz != tz:
+            penalty += GEO_MISMATCH_PENALTY
+        if penalty:
+            stats["geo_flags"] += 1
+        return penalty
 
     def _apply_fingerprint_risk(self, ip: str) -> str | None:
         """Update the IP's cumulative risk (EMA) and act on it.
@@ -383,6 +444,9 @@ class Handler(BaseHTTPRequestHandler):
             "challenge": challenge,
             "difficulty": difficulty,
             "attempt": solves + 1,
+            # Challenge family + sitekey a real provider/solver would consume.
+            "captcha_type": "turnstile",
+            "sitekey": "0xMOCK_TURNSTILE_SITEKEY",
         })
 
     # ── DVSA-grade hardening helpers ──────────────────────────────────────
@@ -436,6 +500,32 @@ class Handler(BaseHTTPRequestHandler):
             stats["timing_flags"] += 1
             return True
         return False
+
+    def _note_cold_start(self, ip: str) -> None:
+        """Apply a one-time soft penalty when an IP hits a sensitive endpoint
+        without first warming up on a landing/info page. Real visitors land,
+        read, then proceed; bots jump straight to the API."""
+        if ip in landed_ips or ip in cold_noted:
+            return
+        cold_noted.add(ip)
+        stats["cold_starts"] += 1
+        fingerprint_scores[ip] = round(fingerprint_scores.get(ip, 0.0) + COLD_START_PENALTY, 1)
+        if fingerprint_scores[ip] >= FINGERPRINT_CAPTCHA_SCORE:
+            flagged_ips.add(ip)
+
+    def _verify_js_challenge(self, body: dict) -> bool:
+        """Verify the browser ran the page's JS challenge: js_seed must be a
+        valid signed seed and js_token must equal the derived value."""
+        seed = body.get("js_seed", "")
+        token = body.get("js_token", "")
+        if not seed or not token or not _verify_signed(seed):
+            return False
+        try:
+            n = int(seed.rpartition(".")[0])
+            expected = (n * 7919 + 104729) % 1000000007
+            return str(expected) == str(token)
+        except Exception:
+            return False
 
     def _session_bound_ok(self, sess: dict, ip: str) -> bool:
         """A session is bound to the IP + User-Agent it was created with; any
@@ -527,9 +617,16 @@ class Handler(BaseHTTPRequestHandler):
 
         # ── HTML pages (browser journey) ──────────────────────────────────────
         elif path == "/":
+            landed_ips.add(ip)  # session-warming signal
+            self._html(200, page_home())
+
+        elif path in ("/help", "/about"):
+            # Informational pages a real visitor browses while warming up.
+            landed_ips.add(ip)
             self._html(200, page_home())
 
         elif path == "/queue":
+            landed_ips.add(ip)
             token = _random_token()
             position = len(queue) + 1
             queue[token] = position
@@ -538,7 +635,9 @@ class Handler(BaseHTTPRequestHandler):
 
         elif path == "/login" and self.headers.get("Accept", "").startswith("text/"):
             token = params.get("token", [None])[0] or ""
-            self._html(200, page_login(token))
+            # Issue a signed seed for the page's JS challenge.
+            js_seed = _sign(str(secrets.randbelow(900000) + 100000))
+            self._html(200, page_login(token, js_seed=js_seed))
 
         elif path == "/search" and "session_token" in params:
             self._html(200, page_search(params["session_token"][0]))
@@ -553,7 +652,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200, {"authenticated": True})
 
         elif path == "/queue/join":
-
+            self._note_cold_start(ip)  # warming: did this IP land first?
             token = _random_token()
             position = len(queue) + 1
             queue[token] = position
@@ -661,8 +760,27 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/login" and is_browser:
             license_number = body.get("license_number") or body.get("licence_number", "")
             queue_token = body.get("queue_token", "")
+            # JS challenge: the page script must have derived js_token from the
+            # signed seed. A scriptless client cannot produce it.
+            if not self._verify_js_challenge(body):
+                stats["js_failed"] += 1
+                fresh = _sign(str(secrets.randbelow(900000) + 100000))
+                self._html(403, page_login(queue_token, error="JavaScript must be enabled to continue", js_seed=fresh))
+                return
+            # Behavioural biometrics: a real candidate generates pointer/scroll
+            # activity while filling the form; a motionless headless bot does not.
+            try:
+                human_signal = int(body.get("human_signal", "0") or "0")
+            except ValueError:
+                human_signal = 0
+            if human_signal < HUMAN_SIGNAL_MIN:
+                stats["js_failed"] += 1
+                fresh = _sign(str(secrets.randbelow(900000) + 100000))
+                self._html(403, page_login(queue_token, error="Unusual activity detected. Please try again.", js_seed=fresh))
+                return
             if not license_number or len(license_number) < 4:
-                self._html(400, page_login(queue_token, error="Enter your driving licence number"))
+                fresh = _sign(str(secrets.randbelow(900000) + 100000))
+                self._html(400, page_login(queue_token, error="Enter your driving licence number", js_seed=fresh))
                 return
             if self._queue_position(queue_token) != 0:
                 # Re-check: the queue may now be clear even without explicit join
