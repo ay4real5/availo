@@ -1,0 +1,18 @@
+{
+  "name": "availo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": ["backend", "frontend"],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:all": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\" \"python scraper/mock_site/server.py\"",
+    "dev:backend": "npm --workspace backend run dev",
+    "dev:frontend": "npm --workspace frontend run dev",
+    "test": "npm --workspace backend test",
+    "lint": "npm --workspace backend run lint",
+    "verify": "npm run lint && npm run test && npm --workspace frontend run build"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

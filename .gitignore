@@ -1,0 +1,22 @@
+node_modules/
+dist/
+*.log
+.env
+.env.*
+!.env.example
+.test-store.json
+dev-store.json
+.debug-store.json
+**/.debug-store.json
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Scraper runtime state
+.proxy_state.json
+**/.mock_state.json
+logs/

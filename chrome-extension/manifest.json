@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "Availo Human Behaviour Capture",
+  "version": "1.0.0",
+  "description": "Capture real scroll and click behaviour on the DVSA booking site to train the bot detector.",
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://*.gov.uk/*",
+    "http://localhost:8000/*",
+    "http://localhost:4000/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.gov.uk/*",
+        "http://localhost:8000/*"
+      ],
+      "js": ["content.js"]
+    }
+  ]
+}

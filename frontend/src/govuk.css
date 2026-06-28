@@ -1,0 +1,255 @@
+/* GOV.UK Design System core styles */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: "GDS Transport", arial, sans-serif;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: #0b0c0c;
+  background: #fff;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: #1d70b8; }
+a:hover { color: #003078; }
+a:visited { color: #4c2c92; }
+
+/* Header */
+.govuk-header {
+  background: #0b0c0c;
+  border-bottom: 10px solid #fff;
+  padding: 10px 0;
+}
+.govuk-header__logotype { display: flex; align-items: center; gap: 12px; text-decoration: none; }
+.govuk-header__logotype-crown {
+  width: 32px; height: 30px;
+  fill: #fff;
+}
+.govuk-header__product-name {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.5px;
+}
+.govuk-header__nav { display: flex; gap: 20px; align-items: center; }
+.govuk-header__nav a { color: #fff; font-size: 0.9rem; text-decoration: none; }
+.govuk-header__nav a:hover { text-decoration: underline; color: #fff; }
+
+/* Phase banner */
+.govuk-phase-banner {
+  border-bottom: 1px solid #b1b4b6;
+  padding: 8px 0;
+  font-size: 0.875rem;
+}
+.govuk-phase-banner__tag {
+  display: inline-block;
+  background: #1d70b8;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-right: 10px;
+}
+
+/* Layout */
+.govuk-width-container { max-width: 960px; margin: 0 auto; padding: 0 15px; }
+.govuk-main-wrapper { padding: 40px 0 60px; }
+
+/* Typography */
+.govuk-heading-xl { font-size: 3rem; font-weight: 700; line-height: 1.05; margin-bottom: 20px; }
+.govuk-heading-l  { font-size: 2rem; font-weight: 700; line-height: 1.1;  margin-bottom: 20px; }
+.govuk-heading-m  { font-size: 1.5rem; font-weight: 700; line-height: 1.2; margin-bottom: 15px; }
+.govuk-heading-s  { font-size: 1.1rem; font-weight: 700; line-height: 1.3; margin-bottom: 10px; }
+.govuk-body { font-size: 1rem; line-height: 1.5; margin-bottom: 15px; }
+.govuk-body-l { font-size: 1.2rem; line-height: 1.5; margin-bottom: 20px; }
+.govuk-body-s { font-size: 0.875rem; line-height: 1.4; margin-bottom: 15px; }
+.govuk-caption-xl { font-size: 1.5rem; color: #505a5f; margin-bottom: 5px; }
+
+/* Form */
+.govuk-form-group { margin-bottom: 20px; }
+.govuk-form-group--error { border-left: 5px solid #d4351c; padding-left: 15px; }
+.govuk-label { display: block; font-weight: 700; margin-bottom: 5px; font-size: 1rem; }
+.govuk-hint { color: #505a5f; font-size: 0.875rem; margin-bottom: 8px; }
+.govuk-error-message { color: #d4351c; font-weight: 700; font-size: 0.875rem; margin-bottom: 8px; }
+.govuk-input {
+  display: block; width: 100%; padding: 5px 4px;
+  border: 2px solid #0b0c0c;
+  font-size: 1rem; font-family: inherit;
+  line-height: 1.5;
+  outline: none;
+}
+.govuk-input:focus { outline: 3px solid #ffdd00; outline-offset: 0; box-shadow: inset 0 0 0 2px; }
+.govuk-input--error { border-color: #d4351c; }
+.govuk-input--width-20 { max-width: 20ch; }
+.govuk-select {
+  display: block; width: 100%;
+  padding: 5px 4px;
+  border: 2px solid #0b0c0c;
+  font-size: 1rem; font-family: inherit;
+  background: #fff;
+  outline: none;
+}
+.govuk-select:focus { outline: 3px solid #ffdd00; outline-offset: 0; box-shadow: inset 0 0 0 2px; }
+
+/* Buttons */
+.govuk-button {
+  display: inline-block;
+  padding: 8px 16px 7px;
+  border: 2px solid transparent;
+  border-radius: 0;
+  background: #00703c;
+  box-shadow: 0 2px 0 #002d18;
+  color: #fff;
+  font-size: 1rem;
+  font-family: inherit;
+  font-weight: 700;
+  line-height: 1.1875;
+  cursor: pointer;
+  text-decoration: none;
+  -webkit-appearance: none;
+  margin-bottom: 2px;
+}
+.govuk-button:hover { background: #005a30; }
+.govuk-button:focus { outline: 3px solid #ffdd00; outline-offset: 0; background: #005a30; }
+.govuk-button:active { top: 2px; box-shadow: none; }
+.govuk-button--secondary {
+  background: #f3f2f1;
+  box-shadow: 0 2px 0 #929191;
+  color: #0b0c0c;
+}
+.govuk-button--secondary:hover { background: #dbdad9; }
+.govuk-button--warning {
+  background: #d4351c;
+  box-shadow: 0 2px 0 #55140b;
+}
+.govuk-button--warning:hover { background: #aa2a16; }
+.govuk-button--start {
+  font-size: 1.2rem;
+  padding: 10px 20px 8px;
+}
+.govuk-button--start svg { margin-left: 8px; vertical-align: middle; }
+.govuk-button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Error summary */
+.govuk-error-summary {
+  border: 5px solid #d4351c;
+  padding: 20px;
+  margin-bottom: 30px;
+}
+.govuk-error-summary__title { font-size: 1.2rem; font-weight: 700; margin-bottom: 10px; }
+.govuk-error-summary__list { margin-left: 20px; }
+.govuk-error-summary__list li { margin-bottom: 6px; }
+.govuk-error-summary__list a { color: #d4351c; }
+
+/* Notification banner */
+.govuk-notification-banner {
+  border: 5px solid #1d70b8;
+  padding: 20px;
+  margin-bottom: 30px;
+}
+.govuk-notification-banner--success { border-color: #00703c; }
+.govuk-notification-banner__header { background: #1d70b8; margin: -20px -20px 20px; padding: 10px 20px; }
+.govuk-notification-banner--success .govuk-notification-banner__header { background: #00703c; }
+.govuk-notification-banner__header p { color: #fff; font-weight: 700; margin: 0; }
+.govuk-notification-banner__heading { font-size: 1.2rem; font-weight: 700; margin-bottom: 10px; }
+
+/* Table */
+.govuk-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+.govuk-table__header, .govuk-table__cell { padding: 10px 20px 10px 0; border-bottom: 1px solid #b1b4b6; vertical-align: top; font-size: 0.875rem; }
+.govuk-table__header { font-weight: 700; }
+.govuk-table__head .govuk-table__header { border-bottom: 2px solid #0b0c0c; }
+
+/* Tag */
+.govuk-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #fff;
+  background: #1d70b8;
+}
+.govuk-tag--green { background: #00703c; }
+.govuk-tag--red { background: #d4351c; }
+.govuk-tag--yellow { background: #f47738; }
+.govuk-tag--grey { background: #505a5f; }
+.govuk-tag--blue { background: #1d70b8; }
+
+/* Panel (confirmation) */
+.govuk-panel {
+  background: #00703c;
+  color: #fff;
+  padding: 35px;
+  text-align: center;
+  margin-bottom: 30px;
+}
+.govuk-panel__title { font-size: 3rem; font-weight: 700; margin-bottom: 15px; }
+.govuk-panel__body { font-size: 1.5rem; }
+.govuk-panel__body strong { display: block; font-size: 2rem; margin-top: 5px; }
+
+/* Inset text */
+.govuk-inset-text {
+  border-left: 10px solid #b1b4b6;
+  padding: 15px;
+  margin-bottom: 20px;
+}
+
+/* Summary list */
+.govuk-summary-list { border-top: 1px solid #b1b4b6; margin-bottom: 30px; }
+.govuk-summary-list__row { display: flex; border-bottom: 1px solid #b1b4b6; padding: 10px 0; gap: 20px; }
+.govuk-summary-list__key { font-weight: 700; min-width: 200px; font-size: 0.875rem; }
+.govuk-summary-list__value { flex: 1; font-size: 0.875rem; }
+
+/* Breadcrumb */
+.govuk-breadcrumbs { margin-bottom: 20px; font-size: 0.875rem; }
+.govuk-breadcrumbs__list { display: flex; gap: 8px; list-style: none; flex-wrap: wrap; }
+.govuk-breadcrumbs__list-item::before { content: "/"; margin-right: 8px; color: #505a5f; }
+.govuk-breadcrumbs__list-item:first-child::before { display: none; }
+
+/* Warning text */
+.govuk-warning-text { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 20px; }
+.govuk-warning-text__icon {
+  display: flex; align-items: center; justify-content: center;
+  width: 35px; height: 35px; min-width: 35px;
+  border-radius: 50%;
+  background: #0b0c0c;
+  color: #fff;
+  font-weight: 900;
+  font-size: 1.5rem;
+}
+.govuk-warning-text__text { font-size: 1rem; font-weight: 700; padding-top: 5px; }
+
+/* Footer */
+.govuk-footer {
+  border-top: 10px solid #1d70b8;
+  padding: 25px 0;
+  background: #f3f2f1;
+  font-size: 0.875rem;
+  color: #505a5f;
+  margin-top: 60px;
+}
+
+/* Step counter */
+.availo-step { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 30px; }
+.availo-step__number {
+  display: flex; align-items: center; justify-content: center;
+  min-width: 40px; height: 40px;
+  background: #1d70b8; color: #fff;
+  font-weight: 700; font-size: 1.1rem;
+  border-radius: 50%;
+}
+.availo-step__content { flex: 1; }
+
+/* Slot card */
+.availo-slot-card {
+  border: 2px solid #b1b4b6;
+  padding: 15px 20px;
+  margin-bottom: 10px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.availo-slot-card--new { border-color: #00703c; background: #f3fdf4; }
+.availo-slot-card__date { font-weight: 700; font-size: 1rem; }
+.availo-slot-card__time { color: #505a5f; font-size: 0.875rem; }

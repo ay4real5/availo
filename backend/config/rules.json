@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "quarantineThreshold": 60,
+  "rules": {
+    "detect_bot": {
+      "enabled": true,
+      "signals": {
+        "high_rpm": {
+          "enabled": true,
+          "threshold": 100,
+          "weight": 40,
+          "reason": "High RPM"
+        },
+        "honeypot_visit": {
+          "enabled": true,
+          "threshold": 1,
+          "weight": 50,
+          "reason": "Visited honeypot"
+        },
+        "headless_ua": {
+          "enabled": true,
+          "pattern": "headless|phantom|selenium|playwright|puppeteer",
+          "weight": 15,
+          "reason": "Headless UA"
+        },
+        "no_scroll_events": {
+          "enabled": true,
+          "weight": 10,
+          "reason": "No scroll events"
+        },
+        "no_mouse_events": {
+          "enabled": true,
+          "weight": 10,
+          "reason": "No mouse events"
+        }
+      }
+    },
+    "flag_early_slot": {
+      "enabled": true,
+      "baseScore": 50,
+      "weeklyMultiplier": 10,
+      "maxScore": 100,
+      "reason": "Earlier by {days} days"
+    },
+    "rate_limit_ip": {
+      "enabled": true,
+      "windowMinutes": 1,
+      "maxRequests": 120,
+      "weight": 35,
+      "reason": "IP rate limit exceeded"
+    }
+  }
+}

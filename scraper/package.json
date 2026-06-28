@@ -1,0 +1,14 @@
+{
+  "name": "availo-scraper",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Availo scraper supervisor + coordinator (spawns the Python worker).",
+  "scripts": {
+    "start": "node supervisor.js",
+    "run-once": "node run_workers.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5"
+  }
+}

@@ -1,0 +1,48 @@
+# Render blueprint — managed hosting for Availo (no VPS required).
+# Apply via Render Dashboard → "New +" → "Blueprint" and point it at this repo.
+#
+# Phase 1 (this file): the backend API + Supabase. Deploy this first so the
+# frontend (Vercel) and the scraper have a public backend URL to talk to.
+#
+# Phase 2 (scraper + mock target) needs BOTH Node and Python in one service, so
+# it ships as a Docker worker — see docs/DEPLOY_VERCEL_RENDER.md. It is left out
+# here intentionally to keep Phase 1 simple and correct.
+
+services:
+  - type: web
+    name: availo-backend
+    runtime: node
+    rootDir: backend
+    plan: free
+    buildCommand: npm ci
+    startCommand: node src/index.js
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Generated once by Render and kept stable. The Phase 2 scraper service
+      # must be given this same value so it can authenticate to the backend.
+      - key: SCRAPER_API_KEY
+        generateValue: true
+      - key: JWT_SECRET
+        generateValue: true
+      # Protects the admin dashboard surface. Render generates a strong value;
+      # copy it from the service's "Environment" tab to sign in to the dashboard.
+      - key: ADMIN_TOKEN
+        generateValue: true
+      # Set these in the Render dashboard (marked sync:false so they are NOT
+      # committed to git):
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      # Your Vercel frontend origin(s), comma-separated, e.g.
+      #   https://availo.vercel.app
+      - key: CORS_ORIGIN
+        sync: false
+      # Optional email (Resend). Leave unset to disable outbound email.
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
