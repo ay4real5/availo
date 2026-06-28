@@ -188,5 +188,36 @@ def is_real_proxy(proxy: str | None) -> bool:
 
 
 def proxy_for_httpx(proxy: str | None) -> str | None:
-    """Return a proxy URL suitable for httpx, or None to go direct."""
-    return proxy if is_real_proxy(proxy) else None
+    """Return a proxy URL suitable for httpx, or None to go direct.
+
+    Any '#geo=..' coherence annotation is stripped so only a clean, routable URL
+    is handed to the HTTP client.
+    """
+    return proxy.split("#", 1)[0] if is_real_proxy(proxy) else None
+
+
+def proxy_geo(proxy: str | None) -> str | None:
+    """Return the egress country code a proxy advertises, or None if unknown.
+
+    Annotate a proxy with its country via a URL fragment so the worker can derive
+    a browser identity (locale/timezone/IP) that MATCHES the exit node, e.g.:
+
+        http://user:pass@gw.provider.com:8000#geo=GB
+        socks5://host:1080#FR
+
+    Placeholders ('mock-residential-001', 'direct') carry no geo -> None, so the
+    identity falls back to its default country. This keeps local-dev behaviour
+    unchanged while enabling true network<->browser geo coherence in production.
+    """
+    if not proxy or "#" not in proxy:
+        return None
+    frag = proxy.rsplit("#", 1)[1].strip()
+    if not frag:
+        return None
+    # Accept 'geo=GB', 'country=GB' or a bare 'GB'.
+    for key in ("geo=", "country="):
+        if frag.lower().startswith(key):
+            frag = frag[len(key):]
+            break
+    frag = frag.strip().upper()
+    return frag if len(frag) == 2 and frag.isalpha() else None

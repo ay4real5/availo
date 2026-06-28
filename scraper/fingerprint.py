@@ -27,6 +27,13 @@ PROFILES = [
         "mobile": "?0",
         "engine": "blink",
         "viewport": {"width": 1366, "height": 768},
+        "screen": {"width": 1920, "height": 1080},
+        "dpr": 1.0,
+        "hardware_concurrency": 8,
+        "device_memory": 8,
+        "max_touch_points": 0,
+        "color_depth": 24,
+        "platform_js": "Win32",
         "webgl_vendor": "Google Inc. (Intel)",
         "webgl_renderer": "ANGLE (Intel, Intel(R) UHD Graphics 620 Direct3D11 vs_5_0 ps_5_0, D3D11)",
     },
@@ -37,6 +44,13 @@ PROFILES = [
         "mobile": "?0",
         "engine": "blink",
         "viewport": {"width": 1440, "height": 900},
+        "screen": {"width": 1680, "height": 1050},
+        "dpr": 2.0,
+        "hardware_concurrency": 10,
+        "device_memory": 8,
+        "max_touch_points": 0,
+        "color_depth": 24,
+        "platform_js": "MacIntel",
         "webgl_vendor": "Google Inc. (Apple)",
         "webgl_renderer": "ANGLE (Apple, Apple M1, OpenGL 4.1)",
     },
@@ -47,6 +61,13 @@ PROFILES = [
         "mobile": None,
         "engine": "gecko",
         "viewport": {"width": 1536, "height": 864},
+        "screen": {"width": 1920, "height": 1080},
+        "dpr": 1.25,
+        "hardware_concurrency": 8,
+        "device_memory": None,
+        "max_touch_points": 0,
+        "color_depth": 24,
+        "platform_js": "Win32",
         "webgl_vendor": "Mozilla",
         "webgl_renderer": "ANGLE (Intel, Intel(R) UHD Graphics 620 Direct3D11 vs_5_0 ps_5_0)",
     },
@@ -57,14 +78,22 @@ PROFILES = [
         "mobile": None,
         "engine": "webkit",
         "viewport": {"width": 1512, "height": 982},
+        "screen": {"width": 1512, "height": 982},
+        "dpr": 2.0,
+        "hardware_concurrency": 10,
+        "device_memory": None,
+        "max_touch_points": 0,
+        "color_depth": 30,
+        "platform_js": "MacIntel",
         "webgl_vendor": "Apple",
         "webgl_renderer": "Apple GPU",
     },
 ]
 
 # IP first-octet -> geography. The mock cross-checks Accept-Language against the
-# country implied by the source IP, so the identity must keep these aligned.
-# All blocks here are UK residential ranges -> en-GB / Europe-London.
+# country implied by the source IP, so the identity must keep these aligned. Most
+# blocks are UK residential ranges; a few non-GB blocks exist so an identity can
+# be derived to MATCH a proxy's egress country (locale/timezone/IP all agree).
 GEO_BLOCKS = {
     86: {"country": "GB", "languages": ["en-GB", "en"], "timezone": "Europe/London", "geo": (51.5074, -0.1278)},
     81: {"country": "GB", "languages": ["en-GB", "en"], "timezone": "Europe/London", "geo": (53.4808, -2.2426)},
@@ -72,8 +101,19 @@ GEO_BLOCKS = {
     25: {"country": "GB", "languages": ["en-GB", "en"], "timezone": "Europe/London", "geo": (55.9533, -3.1883)},
     31: {"country": "GB", "languages": ["en-GB", "en"], "timezone": "Europe/London", "geo": (51.4545, -2.5879)},
     51: {"country": "GB", "languages": ["en-GB", "en"], "timezone": "Europe/London", "geo": (53.8008, -1.5491)},
+    84: {"country": "IE", "languages": ["en-IE", "en"], "timezone": "Europe/Dublin", "geo": (53.3498, -6.2603)},
+    80: {"country": "FR", "languages": ["fr-FR", "fr"], "timezone": "Europe/Paris", "geo": (48.8566, 2.3522)},
 }
-_UK_BLOCKS = list(GEO_BLOCKS.keys())
+_UK_BLOCKS = [octet for octet, b in GEO_BLOCKS.items() if b["country"] == "GB"]
+
+
+def _blocks_for_country(country: str | None) -> list[int]:
+    """First-octets whose block matches the given country (defaults to GB)."""
+    if not country:
+        return _UK_BLOCKS
+    c = country.upper()
+    matching = [octet for octet, b in GEO_BLOCKS.items() if b["country"] == c]
+    return matching or _UK_BLOCKS
 
 
 def _accept_language(languages: list[str]) -> str:
@@ -89,9 +129,10 @@ def _accept_language(languages: list[str]) -> str:
     return ",".join(parts)
 
 
-def random_ip() -> str:
-    # UK residential-looking ranges (kept in sync with GEO_BLOCKS).
-    block = random.choice(_UK_BLOCKS)
+def random_ip(country: str | None = None) -> str:
+    # Residential-looking range for the requested country (defaults to GB), kept
+    # in sync with GEO_BLOCKS so the IP's implied country matches the identity.
+    block = random.choice(_blocks_for_country(country))
     return f"{block}.{random.randint(1,254)}.{random.randint(1,254)}.{random.randint(1,254)}"
 
 
@@ -104,8 +145,14 @@ def geo_for_ip(ip: str) -> dict:
     return GEO_BLOCKS.get(first, GEO_BLOCKS[86])
 
 
-def build_identity() -> dict:
+def build_identity(country: str | None = None) -> dict:
     """Return a coherent, GEO-aligned fingerprint.
+
+    When ``country`` is given (e.g. the egress country of the chosen residential
+    proxy), the source IP, Accept-Language, timezone, locale and geolocation are
+    all derived to MATCH it — so the network path and the browser environment
+    agree. A mismatch (London locale over a German exit IP) is a strong
+    real-world detection signal; deriving the identity from the proxy removes it.
 
     The returned dict contains:
       headers      -- request headers (UA, client hints, Accept-Language, geo hint)
@@ -115,7 +162,7 @@ def build_identity() -> dict:
                       timezone, viewport, WebGL vendor/renderer, geolocation)
     """
     profile = random.choice(PROFILES)
-    ip = random_ip()
+    ip = random_ip(country)
     geo = geo_for_ip(ip)
     accept_language = _accept_language(geo["languages"])
 
@@ -148,9 +195,21 @@ def build_identity() -> dict:
         "timezone": geo["timezone"],
         "geolocation": {"latitude": geo["geo"][0], "longitude": geo["geo"][1], "accuracy": 50},
         "viewport": profile["viewport"],
+        "screen": profile["screen"],
+        "device_scale_factor": profile["dpr"],
+        "hardware_concurrency": profile["hardware_concurrency"],
+        "device_memory": profile["device_memory"],
+        "max_touch_points": profile["max_touch_points"],
+        "color_depth": profile["color_depth"],
+        "platform": profile["platform_js"],
         "webgl_vendor": profile["webgl_vendor"],
         "webgl_renderer": profile["webgl_renderer"],
         "languages": geo["languages"],
+        # Per-identity stable seeds so canvas/audio fingerprints are consistent
+        # within a session but differ across identities (a fixed canvas hash
+        # across many "users" is itself a detection signal).
+        "canvas_seed": random.randint(1, 2_000_000_000),
+        "audio_seed": random.randint(1, 2_000_000_000),
     }
 
     return {

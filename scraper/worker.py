@@ -22,7 +22,7 @@ import httpx
 
 import circuit
 from captcha_solver import solve_and_submit
-from proxy_rotator import pick_proxy, proxy_for_httpx, sticky_proxy, record_proxy_result
+from proxy_rotator import pick_proxy, proxy_for_httpx, sticky_proxy, record_proxy_result, proxy_geo
 from fingerprint import build_identity
 from httpclient import new_session, TRANSPORT_ERRORS, BACKEND as HTTP_BACKEND, IMPERSONATION
 from target import get_target
@@ -614,8 +614,8 @@ def book_for_user(
 
     # Fresh browser fingerprint, but a STICKY residential proxy per user so the
     # whole journey for this candidate comes from one consistent IP.
-    identity = build_identity()
     proxy = sticky_proxy(user_id)
+    identity = build_identity(country=proxy_geo(proxy))
     log.info(f"user {user_id}: identity ip={identity['ip']} proxy={proxy} engine={identity['engine']}")
 
     with make_client(identity["headers"], proxy) as client:
@@ -757,8 +757,11 @@ def scrape_centre(centre: str) -> None:
     except circuit.CircuitOpenError as e:
         log.error(f"detection circuit OPEN — standing down for {e.remaining:.0f}s")
         return
-    identity = build_identity()
+    # Pick the egress proxy FIRST, then derive a browser identity whose locale,
+    # timezone, language and source IP all match the proxy's country — so the
+    # network path and the browser environment are mutually coherent.
     proxy_used = pick_proxy()
+    identity = build_identity(country=proxy_geo(proxy_used))
     ip_used = identity["ip"]
     ua_used = identity["ua"]
     requests_per_minute = random.randint(20, 80)
@@ -811,8 +814,8 @@ def scrape_centre(centre: str) -> None:
                         f"detection ({reason}) on attempt {attempt}/{max_attempts} — "
                         f"rotating identity + proxy, cooling down {cooldown:.1f}s"
                     )
-                    identity = build_identity()
                     proxy_used = pick_proxy()
+                    identity = build_identity(country=proxy_geo(proxy_used))
                     provenance.ip_used = identity["ip"]
                     provenance.ua_used = identity["ua"]
                     provenance.proxy_used = proxy_used

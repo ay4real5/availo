@@ -5,8 +5,24 @@ import jwt from "jsonwebtoken";
 import { supabase } from "../lib/supabase.js";
 import { sendWelcomeEmail } from "../lib/email.js";
 import { tokeniseCard } from "../lib/payments.js";
+import { rateLimit, clientIp } from "../middleware/rateLimit.js";
 
 export const authRouter = Router();
+
+// Throttle credential-stuffing / brute force on login: per IP+email so one
+// attacker can't grind a single account, and mass account creation on register.
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  keyGenerator: (req) => `${clientIp(req)}:${String(req.body?.email || "").toLowerCase()}`,
+  message: "Too many sign-in attempts. Please wait a few minutes and try again.",
+});
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  keyGenerator: (req) => clientIp(req),
+  message: "Too many accounts created from this network. Please try again later.",
+});
 
 const DEV_JWT_SECRET = "availo-dev-secret-change-in-prod";
 const JWT_SECRET = process.env.JWT_SECRET || DEV_JWT_SECRET;
@@ -57,7 +73,7 @@ export function requireAuth(req, res, next) {
   }
 }
 
-authRouter.post("/register", async (req, res, next) => {
+authRouter.post("/register", registerLimiter, async (req, res, next) => {
   try {
     const { email, password, name } = registerSchema.parse(req.body);
 
@@ -88,7 +104,7 @@ authRouter.post("/register", async (req, res, next) => {
   }
 });
 
-authRouter.post("/login", async (req, res, next) => {
+authRouter.post("/login", loginLimiter, async (req, res, next) => {
   try {
     const { email, password } = loginSchema.parse(req.body);
 

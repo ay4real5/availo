@@ -46,3 +46,26 @@ jobs:
       - run: npm ci
         working-directory: ${{ github.workspace }}
       - run: npm run build
+
+  scraper:
+    # Anti-bot gate: the hardened mock must BLOCK a naive bot while a
+    # well-behaved client completes the journey. This locks in the evasion vs
+    # defence contract so a regression on either side fails the build.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install httpx
+      - name: Mock hardening regression (naive blocked / sophisticated passes)
+        run: python test_mock_hardening.py
+      - name: Naive bot is blocked by the hardened mock
+        run: |
+          PORT=8011 python scraper/mock_site/server.py &
+          MOCK_PID=$!
+          sleep 2
+          MOCK_URL=http://localhost:8011 python scraper/naive_bot.py
+          STATUS=$?
+          kill $MOCK_PID || true
+          exit $STATUS
