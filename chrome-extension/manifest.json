@@ -1,20 +1,37 @@
 {
   "manifest_version": 3,
-  "name": "Availo Human Behaviour Capture",
-  "version": "1.0.0",
-  "description": "Capture real scroll and click behaviour on the DVSA booking site to train the bot detector.",
+  "name": "Availo Watch & Assist",
+  "version": "1.1.0",
+  "description": "Watches the DVSA change-test page in your own browser tab and alerts you the instant an earlier slot appears. Never books or holds anything without your click.",
   "permissions": [
     "activeTab",
-    "storage"
+    "storage",
+    "notifications",
+    "tabs",
+    "alarms"
   ],
   "host_permissions": [
     "https://*.gov.uk/*",
     "http://localhost:8000/*",
     "http://localhost:4000/*"
   ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "background": {
     "service_worker": "background.js"
   },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "options_page": "options.html",
   "content_scripts": [
     {
       "matches": [
@@ -22,6 +39,13 @@
         "http://localhost:8000/*"
       ],
       "js": ["content.js"]
+    },
+    {
+      "matches": [
+        "https://*.gov.uk/*",
+        "http://localhost:8000/*"
+      ],
+      "js": ["watch-match.js", "watch-content.js"]
     }
   ]
 }

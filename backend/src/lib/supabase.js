@@ -21,6 +21,7 @@ const defaultTables = {
   bookings: [],
   user_preferences: [],
   scraper_control: [],
+  watch_sessions: [],
 };
 
 function loadTables() {

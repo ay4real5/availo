@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Change your driving test (dev fixture)</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 700px; margin: 40px auto; color: #0b0c0c; }
+  h1 { border-bottom: 4px solid #1d70b8; padding-bottom: 8px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+  th, td { text-align: left; padding: 10px; border-bottom: 1px solid #b1b4b6; }
+  button { padding: 8px 14px; background: #00703c; color: white; border: none; border-radius: 4px; cursor: pointer; }
+  button:hover { background: #005a30; }
+  .note { background: #f3f2f1; padding: 12px; font-size: 13px; margin-top: 20px; }
+  #blocked-banner { display: none; background: #f3f2f1; border: 2px solid #d4351c; padding: 16px; margin-top: 16px; }
+</style>
+</head>
+<body>
+  <h1>Change your driving test (dev fixture)</h1>
+  <p>This is a hand-built local page for developing <code>chrome-extension/watch-content.js</code> against, without touching the real DVSA site. Add <code>?blocked=1</code> to the URL to simulate a block/CAPTCHA state instead of results.</p>
+
+  <div id="results">
+    <table>
+      <thead><tr><th>Centre</th><th>Date/time</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr data-testid="availo-slot-row" data-slot-centre="Bolton" data-slot-datetime="2026-11-10T09:15:00.000Z">
+          <td>Bolton</td>
+          <td>10 Nov 2026, 09:15</td>
+          <td><button data-testid="availo-slot-hold" onclick="alert('Would submit the real DVSA hold form here.'); this.textContent='Held (fixture)'; this.disabled=true;">Book this test</button></td>
+        </tr>
+        <tr data-testid="availo-slot-row" data-slot-centre="Manchester" data-slot-datetime="2026-11-12T13:00:00.000Z">
+          <td>Manchester</td>
+          <td>12 Nov 2026, 13:00</td>
+          <td><button data-testid="availo-slot-hold">Book this test</button></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div id="blocked-banner" data-testid="availo-blocked">
+    <strong>Sorry, there is a problem with the service</strong>
+    <p>Please try again later. (Simulated block/CAPTCHA marker for dev testing.)</p>
+  </div>
+
+  <div class="note">
+    Dev-only: serve this directory (e.g. <code>npx serve chrome-extension/dev-fixture</code> or
+    <code>python -m http.server 5555</code>), add its origin to a local manifest overlay's
+    <code>content_scripts.matches</code>, load the unpacked extension, open this page, and use the
+    popup to start watching. This origin is intentionally NOT included in the shipped
+    <code>manifest.json</code>.
+  </div>
+
+  <script>
+    if (new URLSearchParams(location.search).get("blocked") === "1") {
+      document.getElementById("results").style.display = "none";
+      document.getElementById("blocked-banner").style.display = "block";
+    }
+
+    // Simulate a cancellation appearing after a few seconds, to exercise the
+    // MutationObserver path (not just the initial scan).
+    if (new URLSearchParams(location.search).get("delayed") === "1") {
+      document.querySelectorAll('[data-testid="availo-slot-row"]').forEach((r) => r.remove());
+      setTimeout(() => {
+        const tbody = document.querySelector("tbody");
+        const row = document.createElement("tr");
+        row.setAttribute("data-testid", "availo-slot-row");
+        row.setAttribute("data-slot-centre", "Bolton");
+        row.setAttribute("data-slot-datetime", "2026-11-08T08:00:00.000Z");
+        row.innerHTML = "<td>Bolton</td><td>8 Nov 2026, 08:00</td><td><button data-testid=\"availo-slot-hold\">Book this test</button></td>";
+        tbody.appendChild(row);
+      }, 4000);
+    }
+  </script>
+</body>
+</html>

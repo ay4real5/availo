@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { apiGet, getMyBookings } from "../api";
 import PaymentMethod from "../components/PaymentMethod";
+import WatchStatus from "../components/WatchStatus";
 
 function fmt(iso) {
   if (!iso) return "—";
@@ -131,6 +132,11 @@ export default function UserDashboard({ user, token, prefs, onChangePrefs, onSig
                 <div>
                   <p className="availo-slot-card__date">{fmt(slot.slot_datetime)}</p>
                   <p className="availo-slot-card__time">{fmtTime(slot.slot_datetime)}</p>
+                  {slot.source_meta?.origin === "extension" && (
+                    <strong className="govuk-tag govuk-tag--blue" style={{ marginTop: 4 }}>
+                      Detected via your Watch extension
+                    </strong>
+                  )}
                 </div>
                 <a
                   className="govuk-button"
@@ -181,6 +187,8 @@ export default function UserDashboard({ user, token, prefs, onChangePrefs, onSig
                 </table>
               )}
             </div>
+
+            <WatchStatus token={token} />
 
             <PaymentMethod token={token} />
           </>

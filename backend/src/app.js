@@ -17,6 +17,7 @@ import { scraperRouter } from "./routes/scraper.js";
 import { rulesRouter } from "./routes/rules.js";
 import { notificationsRouter } from "./routes/notifications.js";
 import { controlRouter } from "./routes/control.js";
+import { watchRouter } from "./routes/watch.js";
 import { metricsHandler } from "./lib/metrics.js";
 import { startSpikeDetector } from "./lib/spikeDetector.js";
 import { getAuditLog } from "./lib/audit.js";
@@ -107,6 +108,10 @@ app.get("/", (_req, res) => {
     <tr><td colspan="3" class="section">Rules &amp; Policy</td></tr>
     <tr><td><span class="method get">GET</span></td><td><a href="/api/rules/config">/api/rules/config</a></td><td>Current rule configuration</td></tr>
     <tr><td><span class="method post">POST</span></td><td>/api/rules/run</td><td>Run a rule against a payload</td></tr>
+    <tr><td colspan="3" class="section">Watch &amp; Assist (real DVSA, user's own browser)</td></tr>
+    <tr><td><span class="method post">POST</span></td><td>/api/watch/sessions</td><td>Start a watch session (requires user JWT)</td></tr>
+    <tr><td><span class="method post">POST</span></td><td>/api/watch/events</td><td>Extension reports a detected slot / hold click / block (requires user JWT)</td></tr>
+    <tr><td><span class="method get">GET</span></td><td>/api/watch/sessions</td><td>Caller's own watch sessions (requires user JWT)</td></tr>
   </table>
 
   <p style="font-size:13px;color:#6c757d">
@@ -182,6 +187,10 @@ app.use("/api/scraper", scraperRouter);
 app.use("/api/rules", rulesRouter);
 app.use("/api/notifications", adminAuth, notificationsRouter);
 app.use("/api/control", controlRouter);
+// Auth is per-user JWT (requireAuth), same as /api/auth — this router never
+// talks to DVSA itself, it only records what the user's own browser extension
+// observed/did in their own session (see chrome-extension/watch-content.js).
+app.use("/api/watch", watchRouter);
 
 startSpikeDetector();
 

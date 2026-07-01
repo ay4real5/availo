@@ -402,3 +402,131 @@ test("POST /api/slots/book creates a confirmed booking", async () => {
     .eq("slot_datetime", slotDatetime);
   assert.equal(slots[0].status, "booked");
 });
+
+async function registerUser(email) {
+  const res = await request(app)
+    .post("/api/auth/register")
+    .send({ email, password: "password123", name: "Watch Tester" })
+    .expect(201);
+  return res.body.token;
+}
+
+test("POST /api/watch/sessions requires auth", async () => {
+  await request(app).post("/api/watch/sessions").send({ centre: "Bolton" }).expect(401);
+});
+
+test("POST /api/watch/sessions starts a session for the caller", async () => {
+  const token = await registerUser("watch1@example.com");
+  const res = await request(app)
+    .post("/api/watch/sessions")
+    .set("Authorization", `Bearer ${token}`)
+    .send({ centre: "Bolton" })
+    .expect(201);
+  assert.equal(res.body.status, "active");
+  assert.equal(res.body.test_centre, "Bolton");
+});
+
+test("POST /api/watch/events slot_detected creates a slot, logs audit, and records the alert attempt", async () => {
+  const token = await registerUser("watch2@example.com");
+  const session = await request(app)
+    .post("/api/watch/sessions")
+    .set("Authorization", `Bearer ${token}`)
+    .send({ centre: "Bolton" })
+    .expect(201);
+
+  const event = await request(app)
+    .post("/api/watch/events")
+    .set("Authorization", `Bearer ${token}`)
+    .send({
+      event_type: "slot_detected",
+      watch_session_id: session.body.id,
+      test_centre: "Bolton",
+      slot_datetime: "2026-11-15T10:00:00.000Z",
+    })
+    .expect(201);
+
+  assert.ok(event.body.slot_id);
+
+  const { data: slots } = await supabase
+    .from("available_slots")
+    .select("*")
+    .eq("id", event.body.slot_id);
+  assert.equal(slots[0].status, "approved");
+  assert.equal(slots[0].source_meta.origin, "extension");
+  assert.equal(slots[0].watch_session_id, session.body.id);
+
+  const audit = await request(app)
+    .get("/api/audit")
+    .query({ event_type: "extension_slot_detected" })
+    .expect(200);
+  assert.ok(audit.body.logs.length >= 1);
+});
+
+test("POST /api/watch/events slot_detected dedupes backup alerts within 30 minutes", async () => {
+  const token = await registerUser("watch3@example.com");
+  await request(app)
+    .post("/api/auth/preferences")
+    .set("Authorization", `Bearer ${token}`)
+    .send({ centre: "Bolton", notify_email: true })
+    .expect(200);
+  const session = await request(app)
+    .post("/api/watch/sessions")
+    .set("Authorization", `Bearer ${token}`)
+    .send({ centre: "Bolton" })
+    .expect(201);
+
+  await request(app)
+    .post("/api/watch/events")
+    .set("Authorization", `Bearer ${token}`)
+    .send({
+      event_type: "slot_detected",
+      watch_session_id: session.body.id,
+      test_centre: "Bolton",
+      slot_datetime: "2026-11-15T10:00:00.000Z",
+    })
+    .expect(201);
+
+  await request(app)
+    .post("/api/watch/events")
+    .set("Authorization", `Bearer ${token}`)
+    .send({
+      event_type: "slot_detected",
+      watch_session_id: session.body.id,
+      test_centre: "Bolton",
+      slot_datetime: "2026-11-16T10:00:00.000Z",
+    })
+    .expect(201);
+
+  const audit = await request(app)
+    .get("/api/audit")
+    .query({ event_type: "watch_backup_alert_sent" })
+    .expect(200);
+  assert.equal(audit.body.logs.length, 1);
+});
+
+test("watch session endpoints reject access to another user's session", async () => {
+  const tokenA = await registerUser("watch4a@example.com");
+  const tokenB = await registerUser("watch4b@example.com");
+
+  const session = await request(app)
+    .post("/api/watch/sessions")
+    .set("Authorization", `Bearer ${tokenA}`)
+    .send({ centre: "Bolton" })
+    .expect(201);
+
+  await request(app)
+    .post(`/api/watch/sessions/${session.body.id}/stop`)
+    .set("Authorization", `Bearer ${tokenB}`)
+    .expect(404);
+
+  await request(app)
+    .post("/api/watch/events")
+    .set("Authorization", `Bearer ${tokenB}`)
+    .send({
+      event_type: "hold_clicked",
+      watch_session_id: session.body.id,
+      test_centre: "Bolton",
+      slot_datetime: "2026-11-15T10:00:00.000Z",
+    })
+    .expect(404);
+});

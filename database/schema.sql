@@ -82,6 +82,24 @@ CREATE TABLE IF NOT EXISTS sessions (
   flags JSONB DEFAULT '{}'
 );
 
+-- ── watch_sessions ───────────────────────────────────────────────────────────
+-- A "watch session" is the user's own browser tab actively watching the real
+-- DVSA site via the Chrome extension. The backend never initiates or drives
+-- these — it only records what the extension reports (see backend/src/routes/watch.js).
+CREATE TABLE IF NOT EXISTS watch_sessions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  status TEXT DEFAULT 'active',        -- active | ended
+  test_centre TEXT,
+  target_date TIMESTAMPTZ,
+  tab_url TEXT,
+  extension_version TEXT,
+  started_at TIMESTAMPTZ DEFAULT NOW(),
+  last_seen_at TIMESTAMPTZ DEFAULT NOW(),
+  ended_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ── scraper_jobs ─────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS scraper_jobs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -120,6 +138,7 @@ ALTER TABLE available_slots ADD COLUMN IF NOT EXISTS user_id UUID;
 ALTER TABLE available_slots ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending';
 ALTER TABLE available_slots ADD COLUMN IF NOT EXISTS source_meta JSONB DEFAULT '{}';
 ALTER TABLE available_slots ADD COLUMN IF NOT EXISTS rule_meta JSONB DEFAULT '{}';
+ALTER TABLE available_slots ADD COLUMN IF NOT EXISTS watch_session_id UUID REFERENCES watch_sessions(id) ON DELETE SET NULL;
 
 -- ── bookings ─────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS bookings (
@@ -200,6 +219,9 @@ CREATE INDEX IF NOT EXISTS idx_audit_log_entity_id ON audit_log(entity_id);
 CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_jobs_test_centre ON scraper_jobs(test_centre);
 CREATE INDEX IF NOT EXISTS idx_notifications_status ON notification_queue(status);
+CREATE INDEX IF NOT EXISTS idx_watch_sessions_user_id ON watch_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_watch_sessions_status ON watch_sessions(status);
+CREATE INDEX IF NOT EXISTS idx_slots_watch_session_id ON available_slots(watch_session_id);
 
 -- ── updated_at triggers ──────────────────────────────────────────────────────
 DROP TRIGGER IF EXISTS trg_users_updated_at ON users;

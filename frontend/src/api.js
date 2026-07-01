@@ -32,6 +32,8 @@ export const getPaymentMethod = (token) => apiGet("/api/auth/payment-method", to
 export const savePaymentMethod = (card, token) => apiPost("/api/auth/payment-method", card, token);
 export const deletePaymentMethod = (token) => apiDelete("/api/auth/payment-method", token);
 export const getMyBookings = (token) => apiGet("/api/auth/my-bookings", token);
+export const getMyWatchSessions = (token) => apiGet("/api/watch/sessions", token);
+export const getMyWatchAlerts = (token) => apiGet("/api/watch/alerts", token);
 
 // ── Admin token (for the protected admin dashboard surface) ──────────────────
 const ADMIN_TOKEN_KEY = "availo_admin_token";
