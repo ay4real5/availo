@@ -30,22 +30,32 @@ const app = express();
 
 app.use(helmet());
 
-// CORS: in production, only allow origins from CORS_ORIGIN (comma-separated).
-// Outside production we allow all origins for convenience.
+// CORS: in production, allow origins from CORS_ORIGIN (comma-separated) plus the
+// Availo frontend on Vercel. The frontend reaches us via Vercel's same-origin
+// /api proxy, which forwards the browser's Origin header (the Vercel domain) —
+// so POSTs would otherwise be rejected even though they're "our" traffic. The
+// pattern covers the production alias AND Vercel's rotating preview URLs
+// (availo-frontend-<anything>.vercel.app) without per-deploy config, while still
+// rejecting arbitrary third-party sites.
 const corsAllowlist = (process.env.CORS_ORIGIN || "")
   .split(",")
   .map((o) => o.trim())
   .filter(Boolean);
-if (process.env.NODE_ENV === "production" && corsAllowlist.length === 0) {
-  logger.warn("CORS_ORIGIN is not set in production — cross-origin requests will be blocked");
+const AVAILO_VERCEL_ORIGIN = /^https:\/\/availo-frontend[a-z0-9-]*\.vercel\.app$/;
+
+function isAllowedOrigin(origin) {
+  if (corsAllowlist.includes(origin)) return true;
+  if (AVAILO_VERCEL_ORIGIN.test(origin)) return true;
+  return false;
 }
+
 app.use(
   cors({
     origin(origin, callback) {
       // Allow same-origin / non-browser requests (no Origin header).
       if (!origin) return callback(null, true);
       if (process.env.NODE_ENV !== "production") return callback(null, true);
-      if (corsAllowlist.includes(origin)) return callback(null, true);
+      if (isAllowedOrigin(origin)) return callback(null, true);
       return callback(new Error("Not allowed by CORS"));
     },
   }),
