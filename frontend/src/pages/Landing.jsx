@@ -6,14 +6,15 @@ export default function Landing({ onSignup, onLogin }) {
           <span className="av-eyebrow">Driving test cancellations</span>
           <h1 className="av-heading-xl">Find an earlier driving test — without the constant refreshing</h1>
           <p className="av-body-l">
-            Availo checks for cancellations at your test centre around the clock and lets
-            you know the moment one earlier than yours appears. One less thing to worry about.
+            Availo's browser extension watches the DVSA "change your test" page while you have it open,
+            and alerts you the instant an earlier slot appears — then fills your details so you're one
+            click from booking.
           </p>
 
           <div className="av-note">
             <p className="av-body" style={{ margin: 0 }}>
-              <strong>Free to use.</strong> We do the watching, so you don't have to keep
-              checking the DVSA site yourself.
+              <strong>Free, and you stay in control.</strong> Availo never books or holds a slot on its
+              own — you always make the booking yourself, on the DVSA site.
             </p>
           </div>
 
@@ -38,15 +39,15 @@ export default function Landing({ onSignup, onLogin }) {
           <div className="av-step">
             <div className="av-step__number">2</div>
             <div className="av-step__content">
-              <p className="av-step__title">We watch, so you don't have to</p>
-              <p className="av-body" style={{ marginBottom: 0 }}>Availo checks for cancellations at your chosen centre continuously.</p>
+              <p className="av-step__title">Install the extension &amp; open DVSA</p>
+              <p className="av-body" style={{ marginBottom: 0 }}>Add the Availo browser extension, then open the real DVSA "change your test" page. It watches that page for you.</p>
             </div>
           </div>
           <div className="av-step">
             <div className="av-step__number">3</div>
             <div className="av-step__content">
-              <p className="av-step__title">Get an instant alert</p>
-              <p className="av-body" style={{ marginBottom: 0 }}>The moment a slot earlier than your current test appears, we let you know right away.</p>
+              <p className="av-step__title">Get alerted &amp; book it yourself</p>
+              <p className="av-body" style={{ marginBottom: 0 }}>The instant an earlier slot appears, we alert you (on-screen, by email, or on your phone) and highlight it — you click to book.</p>
             </div>
           </div>
         </div>

@@ -16,8 +16,6 @@ export default function Preferences({ token, existingPrefs, onSaved }) {
       : "",
     search_days_ahead: existingPrefs?.search_days_ahead ?? 42,
     notify_email: existingPrefs?.notify_email ?? true,
-    auto_book: existingPrefs?.auto_book ?? false,
-    licence_number: existingPrefs?.licence_number || "",
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
@@ -33,9 +31,6 @@ export default function Preferences({ token, existingPrefs, onSaved }) {
     e.preventDefault();
     const errs = {};
     if (!form.centre) errs.centre = "Select a test centre";
-    if (form.auto_book && form.licence_number.trim().length < 5) {
-      errs.licence_number = "Enter your driving licence number to enable auto-booking";
-    }
     if (Object.keys(errs).length) { setErrors(errs); return; }
     setLoading(true);
     try {
@@ -43,8 +38,6 @@ export default function Preferences({ token, existingPrefs, onSaved }) {
         centre: form.centre,
         search_days_ahead: Number(form.search_days_ahead),
         notify_email: form.notify_email,
-        auto_book: form.auto_book,
-        licence_number: form.licence_number.trim() || null,
         current_test_date: form.current_test_date
           ? new Date(form.current_test_date).toISOString()
           : null,
@@ -73,7 +66,8 @@ export default function Preferences({ token, existingPrefs, onSaved }) {
           <span className="av-eyebrow">Set up your alert</span>
           <h1 className="av-heading-l">Where and when do you want to test?</h1>
           <p className="av-body-l">
-            We'll watch for earlier cancellations at your chosen centre and let you know the moment one appears.
+            Tell us your centre and current test date. The Availo extension uses these to spot an earlier
+            slot the moment it appears on the DVSA page you're viewing — and to alert you.
           </p>
 
           <div className="av-card">
@@ -125,35 +119,19 @@ export default function Preferences({ token, existingPrefs, onSaved }) {
               <div className="av-form-group">
                 <div className="av-checkbox-row">
                   <input
-                    id="auto_book"
+                    id="notify_email"
                     type="checkbox"
-                    checked={form.auto_book}
-                    onChange={(e) => set("auto_book", e.target.checked)}
+                    checked={form.notify_email}
+                    onChange={(e) => set("notify_email", e.target.checked)}
                   />
-                  <label className="av-label" htmlFor="auto_book" style={{ marginBottom: 0 }}>
-                    Automatically book the first earlier slot for me
+                  <label className="av-label" htmlFor="notify_email" style={{ marginBottom: 0 }}>
+                    Email me a backup alert
                     <span className="av-hint" style={{ marginTop: 4, marginBottom: 0 }}>
-                      When an earlier slot appears we'll secure it using your saved card.
-                      You'll need to add a payment card and your licence number below.
+                      If the extension spots a slot while you've stepped away, we'll email you so you can come back and book it.
                     </span>
                   </label>
                 </div>
               </div>
-
-              {form.auto_book && (
-                <div className={`av-form-group${errors.licence_number ? " av-form-group--error" : ""}`}>
-                  <label className="av-label" htmlFor="licence_number">Driving licence number</label>
-                  <span className="av-hint">Required so we can sign in to DVSA and change your test on your behalf.</span>
-                  {errors.licence_number && <p className="av-error-message">{errors.licence_number}</p>}
-                  <input
-                    id="licence_number"
-                    className="av-input av-input--width-20"
-                    type="text"
-                    value={form.licence_number}
-                    onChange={(e) => set("licence_number", e.target.value.toUpperCase())}
-                  />
-                </div>
-              )}
 
               <button className="av-btn" type="submit" disabled={loading}>
                 {loading ? "Saving…" : existingPrefs ? "Update my alert" : "Start monitoring for me"}

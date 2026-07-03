@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
-import { apiGet, getMyBookings } from "../api";
-import PaymentMethod from "../components/PaymentMethod";
+import { apiGet } from "../api";
 import WatchStatus from "../components/WatchStatus";
 import PushSetup from "../components/PushSetup";
 
@@ -18,24 +17,20 @@ function fmtTime(iso) {
 
 export default function UserDashboard({ user, token, prefs, onChangePrefs, onSignOut }) {
   const [slots, setSlots] = useState([]);
-  const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
       try {
         const data = await apiGet("/api/auth/my-slots", token);
-        setSlots(data.slots || []);
+        // Only show slots your OWN extension actually spotted on the real DVSA
+        // page. Anything else in the store is demo/mock data and must not be
+        // shown as if it were a real cancellation.
+        setSlots((data.slots || []).filter((s) => s.source_meta?.origin === "extension"));
       } catch {
         setSlots([]);
       } finally {
         setLoading(false);
-      }
-      try {
-        const b = await getMyBookings(token);
-        setBookings(b.bookings || []);
-      } catch {
-        setBookings([]);
       }
     }
     load();
@@ -49,18 +44,6 @@ export default function UserDashboard({ user, token, prefs, onChangePrefs, onSig
     <div className="av-container">
       <main className="av-main">
 
-        {isActive && slots.length > 0 && (
-          <div className="av-banner av-banner--success" role="region">
-            <span className="av-banner__icon" aria-hidden="true">✓</span>
-            <div>
-              <p className="av-banner__heading">
-                {slots.length} earlier slot{slots.length !== 1 ? "s" : ""} found at {prefs.centre}
-              </p>
-              <p className="av-body" style={{ margin: 0 }}>Check below and book one on the DVSA website before it goes.</p>
-            </div>
-          </div>
-        )}
-
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 10, marginBottom: 24 }}>
           <div>
             <h1 className="av-heading-l" style={{ marginBottom: 4 }}>Your alert</h1>
@@ -71,19 +54,28 @@ export default function UserDashboard({ user, token, prefs, onChangePrefs, onSig
 
         {!isActive ? (
           <div className="av-card">
-            <p className="av-body">You haven't set up an alert yet.</p>
+            <p className="av-body">You haven't set up your alert yet — tell us your test centre and current test date.</p>
             <button className="av-btn" onClick={onChangePrefs}>Set up your alert</button>
           </div>
         ) : (
           <>
+            {/* Honest explainer — no pretending we watch DVSA on a server. */}
             <div className="av-card">
+              <h2 className="av-heading-m">How Availo helps you</h2>
+              <p className="av-body">
+                We don't sit on the DVSA website for you — that's against DVSA's rules, and it's not
+                what we do. Instead:
+              </p>
+              <ol className="av-list" style={{ marginBottom: 12 }}>
+                <li>Install the Availo browser extension (below).</li>
+                <li>Open the real <a href="https://www.gov.uk/change-driving-test" target="_blank" rel="noopener noreferrer">DVSA "change your driving test"</a> page and sign in as normal.</li>
+                <li>The extension watches that page for you and alerts you the instant an earlier slot appears — even by email or on your phone if you've stepped away.</li>
+                <li>It fills your details so you're one click from booking. <strong>You always make the booking yourself.</strong></li>
+              </ol>
+            </div>
+
+            <div className="av-card av-section-gap">
               <dl className="av-summary-list" style={{ marginBottom: 20 }}>
-                <div className="av-summary-list__row">
-                  <dt className="av-summary-list__key">Status</dt>
-                  <dd className="av-summary-list__value">
-                    <span className="av-tag av-tag--success">Active — monitoring</span>
-                  </dd>
-                </div>
                 <div className="av-summary-list__row">
                   <dt className="av-summary-list__key">Test centre</dt>
                   <dd className="av-summary-list__value">{prefs.centre}</dd>
@@ -91,7 +83,7 @@ export default function UserDashboard({ user, token, prefs, onChangePrefs, onSig
                 <div className="av-summary-list__row">
                   <dt className="av-summary-list__key">Your current test date</dt>
                   <dd className="av-summary-list__value">
-                    {prefs.current_test_date ? fmt(prefs.current_test_date) : <span style={{ color: "var(--muted)" }}>Not set — showing all available slots</span>}
+                    {prefs.current_test_date ? fmt(prefs.current_test_date) : <span style={{ color: "var(--muted)" }}>Not set — we'll alert you to any available slot</span>}
                   </dd>
                 </div>
                 <div className="av-summary-list__row">
@@ -99,13 +91,11 @@ export default function UserDashboard({ user, token, prefs, onChangePrefs, onSig
                   <dd className="av-summary-list__value">{prefs.search_days_ahead} days from today</dd>
                 </div>
                 <div className="av-summary-list__row">
-                  <dt className="av-summary-list__key">Auto-booking</dt>
+                  <dt className="av-summary-list__key">Email alerts</dt>
                   <dd className="av-summary-list__value">
-                    {prefs.auto_book ? (
-                      <span className="av-tag">On — we'll book the first earlier slot</span>
-                    ) : (
-                      <span style={{ color: "var(--muted)" }}>Off — we'll only alert you</span>
-                    )}
+                    {prefs.notify_email === false
+                      ? <span style={{ color: "var(--muted)" }}>Off</span>
+                      : <span className="av-tag av-tag--success">On</span>}
                   </dd>
                 </div>
               </dl>
@@ -113,83 +103,6 @@ export default function UserDashboard({ user, token, prefs, onChangePrefs, onSig
               <button className="av-btn av-btn--secondary" onClick={onChangePrefs}>
                 Change preferences
               </button>
-            </div>
-
-            <div className="av-section-gap">
-              <h2 className="av-heading-m">
-                {loading ? "Checking for slots…" : slots.length > 0 ? `${slots.length} available slot${slots.length !== 1 ? "s" : ""} at ${prefs.centre}` : `No slots found yet at ${prefs.centre}`}
-              </h2>
-
-              {!loading && slots.length === 0 && (
-                <div className="av-warning">
-                  <span className="av-warning__icon" aria-hidden="true">i</span>
-                  <p className="av-warning__text" style={{ margin: 0 }}>
-                    No earlier cancellations found right now. We're checking continuously — you'll get an alert as soon as one appears.
-                  </p>
-                </div>
-              )}
-
-              {slots.map((slot) => (
-                <div key={slot.id} className="av-slot-card av-slot-card--new">
-                  <div>
-                    <p className="av-slot-card__date">{fmt(slot.slot_datetime)}</p>
-                    <p className="av-slot-card__time">{fmtTime(slot.slot_datetime)}</p>
-                    {slot.source_meta?.origin === "extension" && (
-                      <span className="av-tag" style={{ marginTop: 8 }}>
-                        Detected via your Watch extension
-                      </span>
-                    )}
-                  </div>
-                  <a
-                    className="av-btn"
-                    href="https://www.gov.uk/change-driving-test"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Book on DVSA →
-                  </a>
-                </div>
-              ))}
-
-              {!loading && slots.length > 0 && (
-                <p className="av-body-s" style={{ marginTop: 10 }}>
-                  Slots refresh every 30 seconds. Book quickly — cancellations go fast.
-                </p>
-              )}
-            </div>
-
-            <div className="av-section-gap">
-              <h2 className="av-heading-m">Your bookings</h2>
-              {bookings.length === 0 ? (
-                <p className="av-body" style={{ color: "var(--muted)" }}>No bookings yet. When auto-booking secures a slot it will appear here.</p>
-              ) : (
-                <div className="av-card">
-                  <table className="av-table">
-                    <thead>
-                      <tr>
-                        <th scope="col">Test centre</th>
-                        <th scope="col">Date &amp; time</th>
-                        <th scope="col">Reference</th>
-                        <th scope="col">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {bookings.map((b) => (
-                        <tr key={b.id}>
-                          <td>{b.test_centre}</td>
-                          <td>{fmt(b.slot_datetime)} {fmtTime(b.slot_datetime)}</td>
-                          <td>{b.booking_reference}</td>
-                          <td>
-                            <span className={`av-tag ${b.status === "confirmed" ? "av-tag--success" : b.status === "failed" || b.status === "cancelled" ? "av-tag--danger" : "av-tag--warning"}`}>
-                              {b.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
             </div>
 
             <div className="av-card av-section-gap">
@@ -200,8 +113,43 @@ export default function UserDashboard({ user, token, prefs, onChangePrefs, onSig
               <PushSetup token={token} />
             </div>
 
-            <div className="av-card av-section-gap">
-              <PaymentMethod token={token} />
+            {/* Slots the user's OWN extension spotted on the real DVSA page. */}
+            <div className="av-section-gap">
+              <h2 className="av-heading-m">Slots your extension has spotted</h2>
+              {loading ? (
+                <p className="av-body">Loading…</p>
+              ) : slots.length === 0 ? (
+                <div className="av-warning">
+                  <span className="av-warning__icon" aria-hidden="true">i</span>
+                  <p className="av-warning__text" style={{ margin: 0 }}>
+                    Nothing yet. Install the extension and open the DVSA page with it watching — any earlier
+                    slot it spots will appear here, and you'll be alerted straight away.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {slots.map((slot) => (
+                    <div key={slot.id} className="av-slot-card av-slot-card--new">
+                      <div>
+                        <p className="av-slot-card__date">{fmt(slot.slot_datetime)}</p>
+                        <p className="av-slot-card__time">{fmtTime(slot.slot_datetime)}</p>
+                        <span className="av-tag" style={{ marginTop: 8 }}>Spotted by your extension</span>
+                      </div>
+                      <a
+                        className="av-btn"
+                        href="https://www.gov.uk/change-driving-test"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Book on DVSA →
+                      </a>
+                    </div>
+                  ))}
+                  <p className="av-body-s" style={{ marginTop: 10 }}>
+                    Book quickly — cancellations go fast.
+                  </p>
+                </>
+              )}
             </div>
           </>
         )}
