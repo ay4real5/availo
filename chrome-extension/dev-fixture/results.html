@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Available tests (practice)</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 640px; margin: 40px auto; color: #0b0c0c; padding: 0 16px; }
+  h1 { border-bottom: 4px solid #2f6f62; padding-bottom: 8px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+  th, td { text-align: left; padding: 12px 10px; border-bottom: 1px solid #b1b4b6; }
+  button { padding: 9px 16px; background: #2f6f62; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; }
+  .practice { background: #fbf0dd; border: 1px solid #e0932a; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 20px; }
+  #blocked { display: none; background: #fbeae6; border: 2px solid #c24e3a; padding: 16px; border-radius: 8px; margin-top: 16px; }
+  #confirm { display: none; background: #e4f0ec; border: 2px solid #2f6f62; padding: 16px; border-radius: 8px; margin-top: 20px; }
+</style>
+</head>
+<body data-testid="availo-page-results">
+  <div class="practice">🛟 <strong>Practice mode.</strong> Fast-Path highlighted the earliest matching slot. Click <strong>Select</strong> — that's the click you'll do for real. It never books anything here.</div>
+  <h1>Available tests</h1>
+
+  <div id="results">
+    <table>
+      <thead><tr><th>Centre</th><th>Date &amp; time</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr data-testid="availo-slot-row" data-slot-centre="Bolton" data-slot-datetime="2026-11-10T09:15:00.000Z">
+          <td>Bolton</td>
+          <td>10 Nov 2026, 09:15</td>
+          <td><button data-testid="availo-slot-select" onclick="showConfirm(this)">Select</button></td>
+        </tr>
+        <tr data-testid="availo-slot-row" data-slot-centre="Bolton" data-slot-datetime="2026-11-24T13:00:00.000Z">
+          <td>Bolton</td>
+          <td>24 Nov 2026, 13:00</td>
+          <td><button data-testid="availo-slot-select" onclick="showConfirm(this)">Select</button></td>
+        </tr>
+        <tr data-testid="availo-slot-row" data-slot-centre="Manchester" data-slot-datetime="2026-11-12T13:00:00.000Z">
+          <td>Manchester</td>
+          <td>12 Nov 2026, 13:00</td>
+          <td><button data-testid="availo-slot-select" onclick="showConfirm(this)">Select</button></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div id="confirm">
+    <strong>Nicely done.</strong> On the real site this is where you'd confirm and pay — all you. You've now rehearsed the whole thing.
+  </div>
+
+  <div id="blocked" data-testid="availo-blocked">
+    <strong>Sorry, there is a problem with the service</strong>
+    <p>Please try again later. (Simulated block/CAPTCHA — Fast-Path stops here and hands back to you.)</p>
+  </div>
+
+  <script>
+    function showConfirm() { document.getElementById("confirm").style.display = "block"; }
+    if (new URLSearchParams(location.search).get("blocked") === "1") {
+      document.getElementById("results").style.display = "none";
+      document.getElementById("blocked").style.display = "block";
+    }
+  </script>
+</body>
+</html>

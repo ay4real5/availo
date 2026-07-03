@@ -42,56 +42,58 @@ export default function Register({ onSuccess, onLoginClick }) {
   const hasErrors = Object.keys(errors).some((k) => errors[k]);
 
   return (
-    <div className="govuk-width-container">
-      <main className="govuk-main-wrapper">
-        <div style={{ maxWidth: 500 }}>
+    <div className="av-container">
+      <main className="av-main">
+        <div style={{ maxWidth: 440, margin: "0 auto" }}>
+          <div className="av-card">
 
-          {(hasErrors || serverError) && (
-            <div className="govuk-error-summary" role="alert">
-              <h2 className="govuk-error-summary__title">There is a problem</h2>
-              <ul className="govuk-error-summary__list">
-                {Object.entries(errors).filter(([, v]) => v).map(([k, v]) => (
-                  <li key={k}><a href={`#${k}`}>{v}</a></li>
-                ))}
-                {serverError && <li>{serverError}</li>}
-              </ul>
-            </div>
-          )}
+            {(hasErrors || serverError) && (
+              <div className="av-error-summary" role="alert">
+                <h2 className="av-error-summary__title">There is a problem</h2>
+                <ul className="av-error-summary__list">
+                  {Object.entries(errors).filter(([, v]) => v).map(([k, v]) => (
+                    <li key={k}><a href={`#${k}`}>{v}</a></li>
+                  ))}
+                  {serverError && <li>{serverError}</li>}
+                </ul>
+              </div>
+            )}
 
-          <h1 className="govuk-heading-l">Create your account</h1>
+            <h1 className="av-heading-l">Create your account</h1>
 
-          <form onSubmit={submit} noValidate>
-            <div className={`govuk-form-group${errors.name ? " govuk-form-group--error" : ""}`}>
-              <label className="govuk-label" htmlFor="name">Full name</label>
-              {errors.name && <p className="govuk-error-message" id="name-error">{errors.name}</p>}
-              <input id="name" className={`govuk-input${errors.name ? " govuk-input--error" : ""}`} type="text" autoComplete="name" value={form.name} onChange={(e) => set("name", e.target.value)} aria-describedby={errors.name ? "name-error" : undefined} />
-            </div>
+            <form onSubmit={submit} noValidate>
+              <div className={`av-form-group${errors.name ? " av-form-group--error" : ""}`}>
+                <label className="av-label" htmlFor="name">Full name</label>
+                {errors.name && <p className="av-error-message" id="name-error">{errors.name}</p>}
+                <input id="name" className="av-input" type="text" autoComplete="name" value={form.name} onChange={(e) => set("name", e.target.value)} aria-describedby={errors.name ? "name-error" : undefined} />
+              </div>
 
-            <div className={`govuk-form-group${errors.email ? " govuk-form-group--error" : ""}`}>
-              <label className="govuk-label" htmlFor="email">Email address</label>
-              {errors.email && <p className="govuk-error-message" id="email-error">{errors.email}</p>}
-              <input id="email" className={`govuk-input${errors.email ? " govuk-input--error" : ""}`} type="email" autoComplete="email" value={form.email} onChange={(e) => set("email", e.target.value)} aria-describedby={errors.email ? "email-error" : undefined} />
-            </div>
+              <div className={`av-form-group${errors.email ? " av-form-group--error" : ""}`}>
+                <label className="av-label" htmlFor="email">Email address</label>
+                {errors.email && <p className="av-error-message" id="email-error">{errors.email}</p>}
+                <input id="email" className="av-input" type="email" autoComplete="email" value={form.email} onChange={(e) => set("email", e.target.value)} aria-describedby={errors.email ? "email-error" : undefined} />
+              </div>
 
-            <div className={`govuk-form-group${errors.password ? " govuk-form-group--error" : ""}`}>
-              <label className="govuk-label" htmlFor="password">Password</label>
-              <span className="govuk-hint">Must be at least 8 characters</span>
-              {errors.password && <p className="govuk-error-message" id="password-error">{errors.password}</p>}
-              <input id="password" className={`govuk-input${errors.password ? " govuk-input--error" : ""}`} type="password" autoComplete="new-password" value={form.password} onChange={(e) => set("password", e.target.value)} aria-describedby={errors.password ? "password-error" : undefined} />
-            </div>
+              <div className={`av-form-group${errors.password ? " av-form-group--error" : ""}`}>
+                <label className="av-label" htmlFor="password">Password</label>
+                <span className="av-hint">Must be at least 8 characters</span>
+                {errors.password && <p className="av-error-message" id="password-error">{errors.password}</p>}
+                <input id="password" className="av-input" type="password" autoComplete="new-password" value={form.password} onChange={(e) => set("password", e.target.value)} aria-describedby={errors.password ? "password-error" : undefined} />
+              </div>
 
-            <div className={`govuk-form-group${errors.confirm ? " govuk-form-group--error" : ""}`}>
-              <label className="govuk-label" htmlFor="confirm">Confirm password</label>
-              {errors.confirm && <p className="govuk-error-message" id="confirm-error">{errors.confirm}</p>}
-              <input id="confirm" className={`govuk-input${errors.confirm ? " govuk-input--error" : ""}`} type="password" autoComplete="new-password" value={form.confirm} onChange={(e) => set("confirm", e.target.value)} aria-describedby={errors.confirm ? "confirm-error" : undefined} />
-            </div>
+              <div className={`av-form-group${errors.confirm ? " av-form-group--error" : ""}`}>
+                <label className="av-label" htmlFor="confirm">Confirm password</label>
+                {errors.confirm && <p className="av-error-message" id="confirm-error">{errors.confirm}</p>}
+                <input id="confirm" className="av-input" type="password" autoComplete="new-password" value={form.confirm} onChange={(e) => set("confirm", e.target.value)} aria-describedby={errors.confirm ? "confirm-error" : undefined} />
+              </div>
 
-            <button className="govuk-button" type="submit" disabled={loading}>
-              {loading ? "Creating account…" : "Create account"}
-            </button>
-          </form>
+              <button className="av-btn" style={{ width: "100%", justifyContent: "center" }} type="submit" disabled={loading}>
+                {loading ? "Creating account…" : "Create account"}
+              </button>
+            </form>
+          </div>
 
-          <p className="govuk-body">
+          <p className="av-body" style={{ textAlign: "center", marginTop: 18 }}>
             Already have an account?{" "}
             <a href="#" onClick={(e) => { e.preventDefault(); onLoginClick(); }}>Sign in</a>
           </p>

@@ -22,6 +22,7 @@ const defaultTables = {
   user_preferences: [],
   scraper_control: [],
   watch_sessions: [],
+  push_subscriptions: [],
 };
 
 function loadTables() {

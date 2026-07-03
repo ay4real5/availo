@@ -59,106 +59,107 @@ export default function Preferences({ token, existingPrefs, onSaved }) {
   }
 
   return (
-    <div className="govuk-width-container">
-      <main className="govuk-main-wrapper">
-        <div style={{ maxWidth: 560 }}>
+    <div className="av-container">
+      <main className="av-main">
+        <div style={{ maxWidth: 600, margin: "0 auto" }}>
 
           {serverError && (
-            <div className="govuk-error-summary" role="alert">
-              <h2 className="govuk-error-summary__title">There is a problem</h2>
-              <ul className="govuk-error-summary__list"><li>{serverError}</li></ul>
+            <div className="av-error-summary" role="alert">
+              <h2 className="av-error-summary__title">There is a problem</h2>
+              <ul className="av-error-summary__list"><li>{serverError}</li></ul>
             </div>
           )}
 
-          <span className="govuk-caption-xl">Set up your alert</span>
-          <h1 className="govuk-heading-l">Where and when do you want to test?</h1>
-          <p className="govuk-body">
-            We'll check for earlier cancellations at your chosen centre and email you the moment one appears.
+          <span className="av-eyebrow">Set up your alert</span>
+          <h1 className="av-heading-l">Where and when do you want to test?</h1>
+          <p className="av-body-l">
+            We'll watch for earlier cancellations at your chosen centre and let you know the moment one appears.
           </p>
 
-          <form onSubmit={submit} noValidate>
-            <div className={`govuk-form-group${errors.centre ? " govuk-form-group--error" : ""}`}>
-              <label className="govuk-label" htmlFor="centre">Test centre</label>
-              <span className="govuk-hint">Choose the centre where you want to take your test</span>
-              {errors.centre && <p className="govuk-error-message">{errors.centre}</p>}
-              <select
-                id="centre"
-                className="govuk-select"
-                value={form.centre}
-                onChange={(e) => set("centre", e.target.value)}
-              >
-                <option value="">Select a test centre</option>
-                {CENTRES.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-
-            <div className="govuk-form-group">
-              <label className="govuk-label" htmlFor="current_test_date">Your current test date (optional)</label>
-              <span className="govuk-hint">
-                If you have a test booked, we'll only alert you to slots that are earlier than this date.
-                Leave blank to see all available slots.
-              </span>
-              <input
-                id="current_test_date"
-                className="govuk-input govuk-input--width-20"
-                type="date"
-                value={form.current_test_date}
-                onChange={(e) => set("current_test_date", e.target.value)}
-              />
-            </div>
-
-            <div className="govuk-form-group">
-              <label className="govuk-label" htmlFor="search_days_ahead">How far ahead to search (days)</label>
-              <span className="govuk-hint">We'll look for slots up to this many days from today. Default is 42 days (6 weeks).</span>
-              <input
-                id="search_days_ahead"
-                className="govuk-input govuk-input--width-20"
-                type="number"
-                min="1"
-                max="180"
-                value={form.search_days_ahead}
-                onChange={(e) => set("search_days_ahead", e.target.value)}
-              />
-            </div>
-
-            <div className="govuk-form-group">
-              <div className="govuk-checkboxes__item" style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-                <input
-                  id="auto_book"
-                  className="govuk-checkboxes__input"
-                  type="checkbox"
-                  checked={form.auto_book}
-                  onChange={(e) => set("auto_book", e.target.checked)}
-                />
-                <label className="govuk-label govuk-checkboxes__label" htmlFor="auto_book">
-                  Automatically book the first earlier slot for me
-                  <span className="govuk-hint" style={{ marginTop: 4 }}>
-                    When an earlier slot appears we'll secure it using your saved card.
-                    You'll need to add a payment card and your licence number below.
-                  </span>
-                </label>
+          <div className="av-card">
+            <form onSubmit={submit} noValidate>
+              <div className={`av-form-group${errors.centre ? " av-form-group--error" : ""}`}>
+                <label className="av-label" htmlFor="centre">Test centre</label>
+                <span className="av-hint">Choose the centre where you want to take your test</span>
+                {errors.centre && <p className="av-error-message">{errors.centre}</p>}
+                <select
+                  id="centre"
+                  className="av-select"
+                  value={form.centre}
+                  onChange={(e) => set("centre", e.target.value)}
+                >
+                  <option value="">Select a test centre</option>
+                  {CENTRES.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
               </div>
-            </div>
 
-            {form.auto_book && (
-              <div className={`govuk-form-group${errors.licence_number ? " govuk-form-group--error" : ""}`}>
-                <label className="govuk-label" htmlFor="licence_number">Driving licence number</label>
-                <span className="govuk-hint">Required so we can sign in to DVSA and change your test on your behalf.</span>
-                {errors.licence_number && <p className="govuk-error-message">{errors.licence_number}</p>}
+              <div className="av-form-group">
+                <label className="av-label" htmlFor="current_test_date">Your current test date (optional)</label>
+                <span className="av-hint">
+                  If you have a test booked, we'll only alert you to slots that are earlier than this date.
+                  Leave blank to see all available slots.
+                </span>
                 <input
-                  id="licence_number"
-                  className="govuk-input govuk-input--width-20"
-                  type="text"
-                  value={form.licence_number}
-                  onChange={(e) => set("licence_number", e.target.value.toUpperCase())}
+                  id="current_test_date"
+                  className="av-input av-input--width-20"
+                  type="date"
+                  value={form.current_test_date}
+                  onChange={(e) => set("current_test_date", e.target.value)}
                 />
               </div>
-            )}
 
-            <button className="govuk-button" type="submit" disabled={loading}>
-              {loading ? "Saving…" : existingPrefs ? "Update my alert" : "Start monitoring for me"}
-            </button>
-          </form>
+              <div className="av-form-group">
+                <label className="av-label" htmlFor="search_days_ahead">How far ahead to search (days)</label>
+                <span className="av-hint">We'll look for slots up to this many days from today. Default is 42 days (6 weeks).</span>
+                <input
+                  id="search_days_ahead"
+                  className="av-input av-input--width-20"
+                  type="number"
+                  min="1"
+                  max="180"
+                  value={form.search_days_ahead}
+                  onChange={(e) => set("search_days_ahead", e.target.value)}
+                />
+              </div>
+
+              <div className="av-form-group">
+                <div className="av-checkbox-row">
+                  <input
+                    id="auto_book"
+                    type="checkbox"
+                    checked={form.auto_book}
+                    onChange={(e) => set("auto_book", e.target.checked)}
+                  />
+                  <label className="av-label" htmlFor="auto_book" style={{ marginBottom: 0 }}>
+                    Automatically book the first earlier slot for me
+                    <span className="av-hint" style={{ marginTop: 4, marginBottom: 0 }}>
+                      When an earlier slot appears we'll secure it using your saved card.
+                      You'll need to add a payment card and your licence number below.
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              {form.auto_book && (
+                <div className={`av-form-group${errors.licence_number ? " av-form-group--error" : ""}`}>
+                  <label className="av-label" htmlFor="licence_number">Driving licence number</label>
+                  <span className="av-hint">Required so we can sign in to DVSA and change your test on your behalf.</span>
+                  {errors.licence_number && <p className="av-error-message">{errors.licence_number}</p>}
+                  <input
+                    id="licence_number"
+                    className="av-input av-input--width-20"
+                    type="text"
+                    value={form.licence_number}
+                    onChange={(e) => set("licence_number", e.target.value.toUpperCase())}
+                  />
+                </div>
+              )}
+
+              <button className="av-btn" type="submit" disabled={loading}>
+                {loading ? "Saving…" : existingPrefs ? "Update my alert" : "Start monitoring for me"}
+              </button>
+            </form>
+          </div>
         </div>
       </main>
     </div>

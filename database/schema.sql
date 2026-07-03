@@ -189,6 +189,21 @@ CREATE TABLE IF NOT EXISTS audit_log (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- ── push_subscriptions ───────────────────────────────────────────────────────
+-- Web Push subscriptions for phone/desktop alerts. Each row is one browser's
+-- push endpoint (from the Push API), owned by a user. Sent to from the same
+-- slot-detected path that emails, reusing the same dedupe. Endpoint is unique so
+-- re-subscribing the same browser upserts rather than duplicates.
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  endpoint TEXT NOT NULL UNIQUE,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id ON push_subscriptions(user_id);
+
 -- ── scraper_control ──────────────────────────────────────────────────────────
 -- Singleton kill-switch row (id = 'global'). The scraper coordinator/worker read
 -- this each cycle; the dashboard toggles it. Pausing stops new work safely.

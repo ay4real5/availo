@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Availo Watch & Assist",
-  "version": "1.1.0",
-  "description": "Watches the DVSA change-test page in your own browser tab and alerts you the instant an earlier slot appears. Never books or holds anything without your click.",
+  "name": "Availo Fast-Path",
+  "version": "1.2.0",
+  "description": "Alerts you the instant an earlier DVSA driving-test slot appears and fills your own details so you're one click from booking. Never books, holds, or pays on its own.",
   "permissions": [
     "activeTab",
     "storage",
@@ -13,6 +13,7 @@
   "host_permissions": [
     "https://*.gov.uk/*",
     "http://localhost:8000/*",
+    "http://localhost:5555/*",
     "http://localhost:4000/*"
   ],
   "icons": {
@@ -43,9 +44,16 @@
     {
       "matches": [
         "https://*.gov.uk/*",
-        "http://localhost:8000/*"
+        "http://localhost:8000/*",
+        "http://localhost:5555/*"
       ],
-      "js": ["watch-match.js", "watch-content.js"]
+      "js": [
+        "selectors.js",
+        "watch-match.js",
+        "fastpath-util.js",
+        "watch-content.js",
+        "fastpath-content.js"
+      ]
     }
   ]
 }

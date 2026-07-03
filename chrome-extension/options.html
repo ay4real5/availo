@@ -2,25 +2,33 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Availo Watch & Assist — Settings</title>
+  <title>Availo Fast-Path — Settings</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 420px; margin: 24px; color: #212529; }
-    h1 { font-size: 18px; color: #1d70b8; }
-    label { display: block; margin-top: 12px; font-size: 13px; font-weight: bold; }
-    input { width: 100%; box-sizing: border-box; padding: 8px; margin-top: 4px; border: 1px solid #b1b4b6; border-radius: 4px; }
-    button { margin-top: 16px; padding: 8px 16px; background: #1d70b8; color: white; border: none; border-radius: 4px; cursor: pointer; }
-    button:hover { background: #15598f; }
-    #status { margin-top: 12px; font-size: 13px; }
-    #signedIn { display: none; }
-    #signedIn p { font-size: 13px; }
-    a.signout { font-size: 12px; color: #d4351c; cursor: pointer; }
+    :root { --primary: #2f6f62; --primary-dark: #1f4e44; --ink: #232a22; --muted: #67766c; --line: #c3d3c4; --danger: #c24e3a; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 460px; margin: 24px auto; padding: 0 16px; color: var(--ink); }
+    h1 { font-size: 19px; color: var(--primary-dark); }
+    h2 { font-size: 15px; margin-top: 26px; }
+    label { display: block; margin-top: 12px; font-size: 13px; font-weight: 600; }
+    input { width: 100%; box-sizing: border-box; padding: 9px; margin-top: 4px; border: 1.5px solid var(--line); border-radius: 6px; font-size: 14px; }
+    .hint { font-size: 12px; color: var(--muted); margin: 4px 0 0; }
+    button { margin-top: 16px; padding: 9px 18px; background: var(--primary); color: white; border: none; border-radius: 999px; cursor: pointer; font-weight: 600; font-size: 14px; }
+    button:hover { background: var(--primary-dark); }
+    button.link { background: none; color: var(--danger); padding: 0; margin-top: 0; font-weight: 600; }
+    .card { border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin-top: 16px; }
+    .privacy { background: #e4f0ec; border-radius: 8px; padding: 10px 12px; font-size: 12px; color: var(--primary-dark); margin-top: 8px; }
+    #status, #vaultStatus { margin-top: 12px; font-size: 13px; }
+    #signedIn, #vaultSection { display: none; }
+    a.signout { font-size: 12px; color: var(--danger); cursor: pointer; }
+    .row { display: flex; gap: 10px; }
+    .row > div { flex: 1; }
   </style>
 </head>
 <body>
-  <h1>Availo Watch &amp; Assist</h1>
+  <h1>Availo Fast-Path</h1>
 
+  <!-- ── Account ─────────────────────────────────────────────── -->
   <div id="signedOut">
-    <p style="font-size:13px;color:#505a5f;">Sign in with your Availo account. This extension never books or holds anything on its own — it only watches the DVSA page in your own tab and alerts you.</p>
+    <p style="font-size:13px;color:#67766c;">Sign in with your Availo account. The extension only fills your own details and alerts you — it never books, holds, or pays on its own.</p>
     <label>Backend URL</label>
     <input id="backendUrl" type="text" value="http://localhost:4000" />
     <label>Email</label>
@@ -33,8 +41,37 @@
 
   <div id="signedIn">
     <p>Signed in as <strong id="signedInEmail"></strong></p>
-    <p id="prefsSummary" style="color:#505a5f;"></p>
+    <p id="prefsSummary" style="color:#67766c;font-size:13px;"></p>
     <p><a class="signout" id="signOut">Sign out</a></p>
+  </div>
+
+  <!-- ── Local vault (never leaves this browser) ─────────────── -->
+  <div id="vaultSection">
+    <h2>Your booking details</h2>
+    <p class="hint">Fast-Path uses these to fill the DVSA login and search forms instantly, so you're not typing during the race.</p>
+    <div class="privacy">🔒 Stored only in this browser, on this device. These are never sent to Availo's servers.</div>
+
+    <div class="card">
+      <label>Driving licence number</label>
+      <input id="vaultLicence" type="text" autocomplete="off" />
+      <label>Booking reference</label>
+      <input id="vaultBookingRef" type="text" autocomplete="off" />
+      <label>Preferred test centre (for the search form)</label>
+      <input id="vaultCentre" type="text" autocomplete="off" />
+      <div class="row">
+        <div>
+          <label>Search from</label>
+          <input id="vaultDateFrom" type="date" />
+        </div>
+        <div>
+          <label>Search to</label>
+          <input id="vaultDateTo" type="date" />
+        </div>
+      </div>
+      <button id="saveVault">Save details</button>
+      <button id="clearVault" class="link" style="margin-left:14px;">Clear saved details</button>
+      <div id="vaultStatus"></div>
+    </div>
   </div>
 
   <script src="options.js"></script>

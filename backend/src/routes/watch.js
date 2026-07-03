@@ -3,6 +3,7 @@ import { z } from "zod";
 import { supabase } from "../lib/supabase.js";
 import { logAudit } from "../lib/audit.js";
 import { sendSlotAlert } from "../lib/email.js";
+import { sendPush, getVapidPublicKey } from "../lib/push.js";
 import { requireAuth } from "./auth.js";
 import { rateLimit, clientIp } from "../middleware/rateLimit.js";
 
@@ -143,6 +144,61 @@ watchRouter.get("/alerts", requireAuth, async (req, res, next) => {
   }
 });
 
+// ── Web Push subscriptions ───────────────────────────────────────────────────
+// The public VAPID key is safe to expose; the frontend needs it to subscribe.
+watchRouter.get("/push/key", (_req, res) => {
+  res.json({ key: getVapidPublicKey() });
+});
+
+const subscribeSchema = z.object({
+  endpoint: z.string().url(),
+  keys: z.object({ p256dh: z.string().min(1), auth: z.string().min(1) }),
+});
+
+watchRouter.post("/push/subscribe", requireAuth, async (req, res, next) => {
+  try {
+    const sub = subscribeSchema.parse(req.body);
+    // One row per browser endpoint: re-subscribing the same browser updates the
+    // owner/keys rather than duplicating.
+    const { data: existing } = await supabase
+      .from("push_subscriptions")
+      .select("id")
+      .eq("endpoint", sub.endpoint)
+      .single();
+
+    if (existing) {
+      await supabase
+        .from("push_subscriptions")
+        .update({ user_id: req.userId, p256dh: sub.keys.p256dh, auth: sub.keys.auth })
+        .eq("id", existing.id);
+    } else {
+      await supabase.from("push_subscriptions").insert({
+        user_id: req.userId,
+        endpoint: sub.endpoint,
+        p256dh: sub.keys.p256dh,
+        auth: sub.keys.auth,
+      });
+    }
+    res.status(201).json({ subscribed: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+watchRouter.post("/push/unsubscribe", requireAuth, async (req, res, next) => {
+  try {
+    const { endpoint } = z.object({ endpoint: z.string().url() }).parse(req.body);
+    await supabase
+      .from("push_subscriptions")
+      .delete()
+      .eq("endpoint", endpoint)
+      .eq("user_id", req.userId);
+    res.json({ unsubscribed: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 const eventsLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 60,
@@ -203,6 +259,8 @@ async function sendBackupAlertIfDue(user, testCentre, slot) {
 
   if (recentAlerts && recentAlerts.length > 0) return;
 
+  // Both channels fire under this one dedupe gate, so email + push never
+  // double-alert within the window.
   let emailResult = { skipped: true };
   try {
     emailResult = await sendSlotAlert({
@@ -216,6 +274,12 @@ async function sendBackupAlertIfDue(user, testCentre, slot) {
     emailResult = { error: sendErr.message };
   }
 
+  const pushResult = await sendPushToUser(user.id, {
+    title: `Earlier test at ${testCentre}`,
+    body: `A slot on ${new Date(slot.slot_datetime).toLocaleString("en-GB")} just appeared. Open Availo to grab it.`,
+    url: "/",
+  });
+
   await logAudit("watch_backup_alert_sent", {
     entityId: user.id,
     entityType: "user",
@@ -224,9 +288,31 @@ async function sendBackupAlertIfDue(user, testCentre, slot) {
       centre: testCentre,
       slot_datetime: slot.slot_datetime,
       email_id: emailResult.id || null,
-      error: emailResult.error || null,
+      email_error: emailResult.error || null,
+      push_sent: pushResult.sent,
+      push_total: pushResult.total,
     },
   });
+}
+
+// Send a push to every subscription this user has registered, pruning any that
+// the push service reports as dead (404/410).
+async function sendPushToUser(userId, payload) {
+  const { data: subs } = await supabase
+    .from("push_subscriptions")
+    .select("*")
+    .eq("user_id", userId);
+
+  const list = subs ?? [];
+  let sent = 0;
+  for (const sub of list) {
+    const result = await sendPush(sub, payload);
+    if (result.ok) sent += 1;
+    if (result.gone) {
+      await supabase.from("push_subscriptions").delete().eq("id", sub.id);
+    }
+  }
+  return { sent, total: list.length };
 }
 
 watchRouter.post("/events", requireAuth, eventsLimiter, async (req, res, next) => {

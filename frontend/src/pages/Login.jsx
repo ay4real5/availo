@@ -38,43 +38,45 @@ export default function Login({ onSuccess, onRegisterClick }) {
   }
 
   return (
-    <div className="govuk-width-container">
-      <main className="govuk-main-wrapper">
-        <div style={{ maxWidth: 500 }}>
+    <div className="av-container">
+      <main className="av-main">
+        <div style={{ maxWidth: 440, margin: "0 auto" }}>
+          <div className="av-card">
 
-          {(Object.values(errors).some(Boolean) || serverError) && (
-            <div className="govuk-error-summary" role="alert">
-              <h2 className="govuk-error-summary__title">There is a problem</h2>
-              <ul className="govuk-error-summary__list">
-                {Object.entries(errors).filter(([, v]) => v).map(([k, v]) => (
-                  <li key={k}><a href={`#${k}`}>{v}</a></li>
-                ))}
-                {serverError && <li>{serverError}</li>}
-              </ul>
-            </div>
-          )}
+            {(Object.values(errors).some(Boolean) || serverError) && (
+              <div className="av-error-summary" role="alert">
+                <h2 className="av-error-summary__title">There is a problem</h2>
+                <ul className="av-error-summary__list">
+                  {Object.entries(errors).filter(([, v]) => v).map(([k, v]) => (
+                    <li key={k}><a href={`#${k}`}>{v}</a></li>
+                  ))}
+                  {serverError && <li>{serverError}</li>}
+                </ul>
+              </div>
+            )}
 
-          <h1 className="govuk-heading-l">Sign in to Availo</h1>
+            <h1 className="av-heading-l">Welcome back</h1>
 
-          <form onSubmit={submit} noValidate>
-            <div className={`govuk-form-group${errors.email ? " govuk-form-group--error" : ""}`}>
-              <label className="govuk-label" htmlFor="email">Email address</label>
-              {errors.email && <p className="govuk-error-message">{errors.email}</p>}
-              <input id="email" className={`govuk-input${errors.email ? " govuk-input--error" : ""}`} type="email" autoComplete="email" value={form.email} onChange={(e) => set("email", e.target.value)} />
-            </div>
+            <form onSubmit={submit} noValidate>
+              <div className={`av-form-group${errors.email ? " av-form-group--error" : ""}`}>
+                <label className="av-label" htmlFor="email">Email address</label>
+                {errors.email && <p className="av-error-message">{errors.email}</p>}
+                <input id="email" className="av-input" type="email" autoComplete="email" value={form.email} onChange={(e) => set("email", e.target.value)} />
+              </div>
 
-            <div className={`govuk-form-group${errors.password ? " govuk-form-group--error" : ""}`}>
-              <label className="govuk-label" htmlFor="password">Password</label>
-              {errors.password && <p className="govuk-error-message">{errors.password}</p>}
-              <input id="password" className={`govuk-input${errors.password ? " govuk-input--error" : ""}`} type="password" autoComplete="current-password" value={form.password} onChange={(e) => set("password", e.target.value)} />
-            </div>
+              <div className={`av-form-group${errors.password ? " av-form-group--error" : ""}`}>
+                <label className="av-label" htmlFor="password">Password</label>
+                {errors.password && <p className="av-error-message">{errors.password}</p>}
+                <input id="password" className="av-input" type="password" autoComplete="current-password" value={form.password} onChange={(e) => set("password", e.target.value)} />
+              </div>
 
-            <button className="govuk-button" type="submit" disabled={loading}>
-              {loading ? "Signing in…" : "Sign in"}
-            </button>
-          </form>
+              <button className="av-btn" style={{ width: "100%", justifyContent: "center" }} type="submit" disabled={loading}>
+                {loading ? "Signing in…" : "Sign in"}
+              </button>
+            </form>
+          </div>
 
-          <p className="govuk-body">
+          <p className="av-body" style={{ textAlign: "center", marginTop: 18 }}>
             Don't have an account?{" "}
             <a href="#" onClick={(e) => { e.preventDefault(); onRegisterClick(); }}>Create a free account</a>
           </p>

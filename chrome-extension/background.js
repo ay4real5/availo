@@ -36,6 +36,31 @@ async function getBackendUrl() {
   return backendUrl || DEFAULT_BACKEND_URL;
 }
 
+// The vault (licence/booking-ref/search) lives only in chrome.storage.local and
+// is never sent to the backend — background just reads it to answer the content
+// script's autofill request.
+async function getVault() {
+  const r = await chrome.storage.local.get("availoVault");
+  return r.availoVault || null;
+}
+
+// "Fast-Path active for this tab" is kept in chrome.storage.session so it
+// survives the page navigations (login → search → results) and MV3 service-
+// worker suspension. Session storage is in-memory and cleared when the browser
+// closes — right for a transient, sensitive flag.
+async function setFastpathActive(tabId, active) {
+  const key = `fp_${tabId}`;
+  if (active) await chrome.storage.session.set({ [key]: true });
+  else await chrome.storage.session.remove(key);
+}
+
+async function isFastpathActive(tabId) {
+  if (tabId == null) return false;
+  const key = `fp_${tabId}`;
+  const r = await chrome.storage.session.get(key);
+  return Boolean(r[key]);
+}
+
 async function apiFetch(path, { method = "GET", body } = {}) {
   const { backendUrl, token } = await getStored();
   if (!token) throw new Error("not_signed_in");
@@ -111,7 +136,48 @@ async function handleWatchMessage(message, sender, sendResponse) {
       case "USER_CLICKED_HOLD": {
         const tabId = message.tabId;
         await chrome.tabs.update(tabId, { active: true });
-        await chrome.tabs.sendMessage(tabId, { type: "PERFORM_HOLD_CLICK" }).catch(() => {});
+        await chrome.tabs.sendMessage(tabId, { type: "REVEAL_SLOT" }).catch(() => {});
+        sendResponse({ ok: true });
+        break;
+      }
+
+      // -- Fast-Path --------------------------------------------------------
+      case "ARM_FASTPATH": {
+        const tabId = message.tabId;
+        await setFastpathActive(tabId, true);
+        await chrome.tabs.update(tabId, { active: true }).catch(() => {});
+        await chrome.tabs.sendMessage(tabId, { type: "FASTPATH_RUN" }).catch(() => {});
+        sendResponse({ ok: true });
+        break;
+      }
+
+      case "FASTPATH_WHATNOW": {
+        const tabId = sender.tab?.id;
+        const vault = await getVault();
+        const active = await isFastpathActive(tabId);
+        let prefs = null;
+        if (active) {
+          try {
+            const p = await apiFetch("/api/auth/preferences");
+            if (p) prefs = { centre: p.centre, targetDate: p.current_test_date || null };
+          } catch {
+            // not signed in / offline — passive autofill still works without prefs
+          }
+        }
+        sendResponse({ ok: true, active, vault, prefs });
+        break;
+      }
+
+      case "FASTPATH_DONE": {
+        const tabId = sender.tab?.id;
+        await setFastpathActive(tabId, false);
+        sendResponse({ ok: true });
+        break;
+      }
+
+      case "FASTPATH_BLOCKED": {
+        const tabId = sender.tab?.id;
+        await setFastpathActive(tabId, false);
         sendResponse({ ok: true });
         break;
       }
@@ -231,13 +297,13 @@ function notifyDetection(tabId, centre, slotDatetime) {
     type: "basic",
     iconUrl: "icons/icon128.png",
     title: "Availo: earlier slot found!",
-    message: `${centre} — ${when}. Open the tab and click Hold to secure it yourself.`,
+    message: `${centre} — ${when}. Open the tab — we'll highlight it so you can Select it.`,
     priority: 2,
     requireInteraction: true,
-    buttons: [{ title: "Hold this slot" }],
+    buttons: [{ title: "Show me the slot" }],
   });
   chrome.action.setBadgeText({ tabId, text: "!" });
-  chrome.action.setBadgeBackgroundColor({ tabId, color: "#d4351c" });
+  chrome.action.setBadgeBackgroundColor({ tabId, color: "#e0932a" });
 }
 
 chrome.notifications.onButtonClicked.addListener(async (notificationId, buttonIndex) => {
@@ -245,7 +311,7 @@ chrome.notifications.onButtonClicked.addListener(async (notificationId, buttonIn
   const tabId = notificationTabs.get(notificationId);
   if (tabId == null) return;
   await chrome.tabs.update(tabId, { active: true }).catch(() => {});
-  await chrome.tabs.sendMessage(tabId, { type: "PERFORM_HOLD_CLICK" }).catch(() => {});
+  await chrome.tabs.sendMessage(tabId, { type: "REVEAL_SLOT" }).catch(() => {});
 });
 
 chrome.notifications.onClicked.addListener(async (notificationId) => {
@@ -259,6 +325,7 @@ chrome.notifications.onClicked.addListener(async (notificationId) => {
 // is the reliable fallback if this doesn't complete.
 chrome.tabs.onRemoved.addListener((tabId) => {
   if (watchedTabs.has(tabId)) stopWatch(tabId);
+  setFastpathActive(tabId, false);
 });
 
 // chrome.alarms (not setInterval) survives MV3 service-worker suspension, which

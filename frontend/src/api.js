@@ -1,10 +1,28 @@
 import axios from "axios";
 
+// The server always responds with JSON, but a truncated connection (proxy
+// timeout, dev-server restart mid-request, etc.) can deliver an empty or
+// partial body. Parsing that raises a low-level "Unexpected end of JSON
+// input" browser error — catch it here and surface a message a user can
+// actually act on instead.
+async function parseJson(res) {
+  const text = await res.text();
+  if (!text) {
+    if (res.ok) return {};
+    throw new Error("The server didn't respond. Please try again.");
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error("The server sent back something unexpected. Please try again.");
+  }
+}
+
 export async function apiPost(path, body, token) {
   const headers = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
   const res = await fetch(path, { method: "POST", headers, body: JSON.stringify(body) });
-  const data = await res.json();
+  const data = await parseJson(res);
   if (!res.ok) throw new Error(data.message || data.error || "Request failed");
   return data;
 }
@@ -13,7 +31,7 @@ export async function apiGet(path, token) {
   const headers = {};
   if (token) headers["Authorization"] = `Bearer ${token}`;
   const res = await fetch(path, { headers });
-  const data = await res.json();
+  const data = await parseJson(res);
   if (!res.ok) throw new Error(data.message || data.error || "Request failed");
   return data;
 }
@@ -22,7 +40,7 @@ export async function apiDelete(path, token) {
   const headers = {};
   if (token) headers["Authorization"] = `Bearer ${token}`;
   const res = await fetch(path, { method: "DELETE", headers });
-  const data = await res.json();
+  const data = await parseJson(res);
   if (!res.ok) throw new Error(data.message || data.error || "Request failed");
   return data;
 }
@@ -34,6 +52,9 @@ export const deletePaymentMethod = (token) => apiDelete("/api/auth/payment-metho
 export const getMyBookings = (token) => apiGet("/api/auth/my-bookings", token);
 export const getMyWatchSessions = (token) => apiGet("/api/watch/sessions", token);
 export const getMyWatchAlerts = (token) => apiGet("/api/watch/alerts", token);
+export const getPushKey = (token) => apiGet("/api/watch/push/key", token);
+export const subscribePush = (subscription, token) => apiPost("/api/watch/push/subscribe", subscription, token);
+export const unsubscribePush = (endpoint, token) => apiPost("/api/watch/push/unsubscribe", { endpoint }, token);
 
 // ── Admin token (for the protected admin dashboard surface) ──────────────────
 const ADMIN_TOKEN_KEY = "availo_admin_token";

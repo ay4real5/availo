@@ -1,134 +1,191 @@
 (() => {
   // NON-GOAL, read before touching this file: it must never try to bypass a
   // CAPTCHA, spoof headers/UA, retry around a block, or otherwise evade DVSA's
-  // own defenses. It only reads the page the user already has open and only
-  // acts when the user clicks something. If DVSA challenges or blocks this
-  // tab, we stop and tell the user (reportBlocked) — we do not route around
-  // it. That boundary is the entire reason this feature is safe to ship; see
-  // docs/ARCHITECTURE.md §9 for why server-side DVSA automation is not.
+  // own defenses, and it must never click the slot's Select/Confirm/Pay control
+  // itself. It only reads the page the user already has open, and on the user's
+  // explicit click it highlights + scrolls the real DVSA control into view so
+  // THEY can click it. If DVSA challenges or blocks this tab, we stop and tell
+  // the user (reportBlocked). See docs/ARCHITECTURE.md §9.
+  //
+  // All DVSA-DOM selectors come from selectors.js (AVAILO_SELECTORS), loaded
+  // before this file in manifest.json.
 
-  // TODO(spike): these selectors are UNVERIFIED placeholders, written against
-  // the local dev fixture (chrome-extension/dev-fixture/change-test-slots.html)
-  // only. Confirm the real DVSA "change your driving test" markup before this
-  // ships, and update this one object — nothing else in the file should need
-  // to change.
-  const SELECTORS = {
-    slotRow: '[data-testid="availo-slot-row"]',
-    slotDatetimeAttr: "data-slot-datetime",
-    slotCentreAttr: "data-slot-centre",
-    slotHoldButton: '[data-testid="availo-slot-hold"]',
-    blockedMarker: '[data-testid="availo-blocked"]',
-  };
-
+  const R = AVAILO_SELECTORS.results;
   const RESCAN_INTERVAL_MS = 4000;
   const BANNER_ID = "availo-watch-banner";
+  const HIGHLIGHT_CLASS = "availo-slot-highlight";
 
   let watching = false;
   let prefs = null; // { centre, targetDate }
   let observer = null;
   let rescanTimer = null;
   let lastDetectionKey = null;
-  let activeHoldElement = null;
+  let activeSelectElement = null;
   let activeSlotInfo = null; // { datetime, centre }
+
+  ensureHighlightStyle();
+
+  // Fresh scan of the live DOM → ranked, still-present matching rows (earliest
+  // first). Everything reads current reality, never a stale cached row — that's
+  // the confidence pre-check that stops us pointing at a ghost slot.
+  function currentRankedRows() {
+    const rows = [...document.querySelectorAll(R.slotRow)]
+      .map((el) => ({
+        el,
+        centre: el.getAttribute(R.slotCentreAttr),
+        datetime: el.getAttribute(R.slotDatetimeAttr),
+      }))
+      .filter((r) => r.centre && r.datetime);
+
+    const ranked = availoRankMatches(
+      rows.map(({ centre, datetime }) => ({ centre, datetime })),
+      prefs,
+    );
+    return ranked
+      .map((m) => rows.find((r) => r.centre === m.centre && r.datetime === m.datetime))
+      .filter(Boolean);
+  }
+
+  function findSlotRow(centre, datetime) {
+    return currentRankedRows().find((r) => r.centre === centre && r.datetime === datetime) || null;
+  }
 
   function scanForSlots() {
     if (!watching) return;
 
-    if (document.querySelector(SELECTORS.blockedMarker)) {
+    if (document.querySelector(R.blockedMarker)) {
       reportBlocked("challenge_or_block_marker_present");
       stopWatchingLocally();
       return;
     }
 
-    const rows = document.querySelectorAll(SELECTORS.slotRow);
-    for (const row of rows) {
-      const datetime = row.getAttribute(SELECTORS.slotDatetimeAttr);
-      const centre = row.getAttribute(SELECTORS.slotCentreAttr);
-      if (!datetime || !centre) continue;
-
-      if (!availoMatchesTarget({ datetime, centre }, prefs)) continue;
-
-      const key = `${centre}|${datetime}`;
-      if (key === lastDetectionKey) continue; // already alerted for this exact slot
-      lastDetectionKey = key;
-
-      const holdBtn = row.querySelector(SELECTORS.slotHoldButton);
-      activeHoldElement = holdBtn || null;
-      activeSlotInfo = { datetime, centre };
-
-      chrome.runtime.sendMessage({
-        type: "SLOT_DETECTED",
-        test_centre: centre,
-        slot_datetime: new Date(datetime).toISOString(),
-        page_url: window.location.href,
-      });
-
-      showBanner(centre, datetime);
-      break; // one alert at a time is plenty — avoid spamming on a busy page
-    }
+    const ranked = currentRankedRows();
+    const next = ranked.find((r) => `${r.centre}|${r.datetime}` !== lastDetectionKey);
+    if (next) offerSlot(next, { count: ranked.length });
   }
 
-  function showBanner(centre, datetime) {
+  function offerSlot(rowInfo, { count = 1 } = {}) {
+    lastDetectionKey = `${rowInfo.centre}|${rowInfo.datetime}`;
+    activeSelectElement = rowInfo.el.querySelector(R.slotSelectButton) || rowInfo.el;
+    activeSlotInfo = { centre: rowInfo.centre, datetime: rowInfo.datetime };
+
+    chrome.runtime.sendMessage({
+      type: "SLOT_DETECTED",
+      test_centre: rowInfo.centre,
+      slot_datetime: new Date(rowInfo.datetime).toISOString(),
+      page_url: window.location.href,
+    });
+
+    showBanner(rowInfo.centre, rowInfo.datetime, { count });
+  }
+
+  function showBanner(centre, datetime, { count = 1 } = {}) {
     removeBanner();
+    const many = count > 1 ? `${count} earlier slots — here's the soonest` : "Availo: earlier slot found";
     const banner = document.createElement("div");
     banner.id = BANNER_ID;
     banner.style.cssText = [
       "position:fixed", "top:16px", "right:16px", "z-index:2147483647",
-      "background:#fff7bf", "border:2px solid #ffdd00", "border-radius:8px",
-      "padding:14px 16px", "box-shadow:0 4px 12px rgba(0,0,0,0.25)",
+      "background:#fbf0dd", "border:2px solid #e0932a", "border-radius:12px",
+      "padding:16px 18px", "box-shadow:0 6px 20px rgba(35,42,34,0.22)",
       "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",
-      "font-size:14px", "color:#0b0c0c", "max-width:300px",
+      "font-size:14px", "color:#232a22", "max-width:320px",
     ].join(";");
     banner.innerHTML = `
-      <div style="font-weight:bold;margin-bottom:6px;">Availo: earlier slot found</div>
-      <div style="margin-bottom:10px;">${centre} — ${new Date(datetime).toLocaleString()}</div>
-      <button id="availo-hold-btn" style="width:100%;padding:8px;font-weight:bold;background:#00703c;color:#fff;border:none;border-radius:4px;cursor:pointer;">Hold this slot</button>
+      <div style="font-weight:700;margin-bottom:6px;">${many}</div>
+      <div style="margin-bottom:12px;">${centre} — ${new Date(datetime).toLocaleString()}</div>
+      <button id="availo-reveal-btn" style="width:100%;padding:10px;font-weight:700;background:#2f6f62;color:#fff;border:none;border-radius:999px;cursor:pointer;">Show me the slot</button>
+      <p style="margin:8px 0 0;font-size:12px;color:#67766c;">We'll scroll to it and highlight it — you click Select to secure it.</p>
     `;
     document.body.appendChild(banner);
-    document.getElementById("availo-hold-btn").addEventListener("click", performHoldClick);
+    document.getElementById("availo-reveal-btn").addEventListener("click", revealSlot);
   }
 
   function removeBanner() {
     document.getElementById(BANNER_ID)?.remove();
   }
 
-  function performHoldClick() {
-    if (!activeHoldElement || !activeSlotInfo) return;
+  function infoBanner(html) {
+    removeBanner();
+    const banner = document.createElement("div");
+    banner.id = BANNER_ID;
+    banner.style.cssText = "position:fixed;top:16px;right:16px;z-index:2147483647;background:#e4f0ec;border:2px solid #2f6f62;border-radius:12px;padding:14px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;max-width:300px;color:#232a22;";
+    banner.innerHTML = html;
+    document.body.appendChild(banner);
+  }
+
+  function highlight(el) {
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add(HIGHLIGHT_CLASS);
+    try { el.focus({ preventScroll: true }); } catch { /* not focusable */ }
+  }
+
+  // The extension's ONLY interaction with the slot control: bring it into view
+  // and ring it. It does not click it — the human does. Confidence pre-check:
+  // re-verify the offered slot is still live at THIS instant; if it vanished in
+  // the seconds since we alerted, jump to the next-best still-present match
+  // instead of sending the user to a dead row.
+  function revealSlot() {
+    if (!activeSlotInfo) return;
+
+    let target = findSlotRow(activeSlotInfo.centre, activeSlotInfo.datetime);
+    let replaced = false;
+    if (!target) {
+      target = currentRankedRows()[0] || null; // next-best still present
+      replaced = true;
+    }
+
+    if (!target) {
+      infoBanner("That slot just went, and there's no earlier one right now. We're still watching — you'll hear from us the moment another appears.");
+      activeSelectElement = null;
+      activeSlotInfo = null;
+      chrome.runtime.sendMessage({ type: "HOLD_RESULT", outcome: "unknown", message: "Offered slot vanished; nothing else qualifies right now." });
+      return;
+    }
+
+    activeSlotInfo = { centre: target.centre, datetime: target.datetime };
+    activeSelectElement = target.el.querySelector(R.slotSelectButton) || target.el;
+    lastDetectionKey = `${target.centre}|${target.datetime}`;
 
     chrome.runtime.sendMessage({
-      type: "HOLD_CLICKED",
+      type: "HOLD_CLICKED", // telemetry: "user is going for this slot"
       test_centre: activeSlotInfo.centre,
       slot_datetime: new Date(activeSlotInfo.datetime).toISOString(),
     });
 
-    // The one and only action this file ever takes against the real page: the
-    // exact click a human would make on DVSA's own control. Never a raw HTTP
-    // request constructed by us.
-    activeHoldElement.click();
-    removeBanner();
+    highlight(activeSelectElement);
 
-    // Best-effort, advisory-only follow-up — we cannot reliably confirm DVSA
-    // accepted the hold, so this is never used to mark anything "booked".
-    setTimeout(() => {
-      chrome.runtime.sendMessage({
-        type: "HOLD_RESULT",
-        outcome: "attempted",
-        message: "Clicked the hold control; user must confirm on DVSA's own page.",
-      });
-    }, 1500);
+    if (replaced) {
+      infoBanner(`<strong>That one just went.</strong> We've highlighted the next earliest instead:<br>${target.centre} — ${new Date(target.datetime).toLocaleString()}<br><span style="color:#67766c;">Click <strong>Select</strong> on it to secure your test.</span>`);
+    } else {
+      removeBanner();
+    }
+
+    chrome.runtime.sendMessage({
+      type: "HOLD_RESULT",
+      outcome: "attempted",
+      message: replaced
+        ? "Original vanished; highlighted the next-earliest still-present slot for the user."
+        : "Highlighted the Select control; the user clicks it themselves.",
+    });
+  }
+
+  function ensureHighlightStyle() {
+    if (document.getElementById("availo-highlight-style")) return;
+    const style = document.createElement("style");
+    style.id = "availo-highlight-style";
+    style.textContent = `.${HIGHLIGHT_CLASS}{outline:3px solid #e0932a !important;outline-offset:3px !important;border-radius:6px;animation:availoPulse 1.2s ease-in-out 3;}
+@keyframes availoPulse{0%,100%{box-shadow:0 0 0 0 rgba(224,147,42,0.5);}50%{box-shadow:0 0 0 8px rgba(224,147,42,0);}}`;
+    document.head.appendChild(style);
   }
 
   function reportBlocked(reason) {
-    chrome.runtime.sendMessage({
-      type: "BLOCKED",
-      reason,
-      page_url: window.location.href,
-    });
+    chrome.runtime.sendMessage({ type: "BLOCKED", reason, page_url: window.location.href });
     removeBanner();
     const banner = document.createElement("div");
     banner.id = BANNER_ID;
-    banner.style.cssText = "position:fixed;top:16px;right:16px;z-index:2147483647;background:#f3f2f1;border:2px solid #d4351c;border-radius:8px;padding:12px 16px;font-family:sans-serif;font-size:13px;max-width:280px;color:#0b0c0c;";
-    banner.textContent = "Availo Watch stopped: DVSA showed a challenge/block on this page. Please continue manually.";
+    banner.style.cssText = "position:fixed;top:16px;right:16px;z-index:2147483647;background:#fbeae6;border:2px solid #c24e3a;border-radius:12px;padding:14px 16px;font-family:sans-serif;font-size:13px;max-width:300px;color:#232a22;";
+    banner.textContent = "Availo Watch stopped: DVSA showed a challenge or block on this page. Please continue manually.";
     document.body.appendChild(banner);
   }
 
@@ -136,12 +193,11 @@
     watching = true;
     prefs = newPrefs;
     lastDetectionKey = null;
-    activeHoldElement = null;
+    activeSelectElement = null;
     activeSlotInfo = null;
 
     observer = new MutationObserver(() => scanForSlots());
     observer.observe(document.body, { childList: true, subtree: true });
-
     rescanTimer = setInterval(scanForSlots, RESCAN_INTERVAL_MS);
     scanForSlots();
   }
@@ -149,7 +205,7 @@
   function stopWatchingLocally() {
     watching = false;
     prefs = null;
-    activeHoldElement = null;
+    activeSelectElement = null;
     activeSlotInfo = null;
     if (observer) { observer.disconnect(); observer = null; }
     if (rescanTimer) { clearInterval(rescanTimer); rescanTimer = null; }
@@ -161,8 +217,8 @@
       startWatching({ centre: message.centre, targetDate: message.targetDate });
     } else if (message.type === "WATCH_STOP") {
       stopWatchingLocally();
-    } else if (message.type === "PERFORM_HOLD_CLICK") {
-      performHoldClick();
+    } else if (message.type === "REVEAL_SLOT") {
+      revealSlot();
     }
   });
 })();

@@ -530,3 +530,62 @@ test("watch session endpoints reject access to another user's session", async ()
     })
     .expect(404);
 });
+
+test("GET /api/watch/push/key returns the VAPID key field (null when unconfigured)", async () => {
+  const res = await request(app).get("/api/watch/push/key").expect(200);
+  assert.ok(Object.prototype.hasOwnProperty.call(res.body, "key"));
+});
+
+test("push subscribe requires auth and stores one row per endpoint (upsert)", async () => {
+  const token = await registerUser("push1@example.com");
+  const sub = {
+    endpoint: "https://push.example.com/sub/abc123",
+    keys: { p256dh: "p256dh-key", auth: "auth-key" },
+  };
+
+  await request(app).post("/api/watch/push/subscribe").send(sub).expect(401);
+
+  await request(app)
+    .post("/api/watch/push/subscribe")
+    .set("Authorization", `Bearer ${token}`)
+    .send(sub)
+    .expect(201);
+
+  // Re-subscribing the same endpoint upserts, not duplicates.
+  await request(app)
+    .post("/api/watch/push/subscribe")
+    .set("Authorization", `Bearer ${token}`)
+    .send(sub)
+    .expect(201);
+
+  const { data: rows } = await supabase
+    .from("push_subscriptions")
+    .select("*")
+    .eq("endpoint", sub.endpoint);
+  assert.equal(rows.length, 1);
+});
+
+test("push unsubscribe removes the caller's subscription", async () => {
+  const token = await registerUser("push2@example.com");
+  const sub = {
+    endpoint: "https://push.example.com/sub/xyz789",
+    keys: { p256dh: "p", auth: "a" },
+  };
+  await request(app)
+    .post("/api/watch/push/subscribe")
+    .set("Authorization", `Bearer ${token}`)
+    .send(sub)
+    .expect(201);
+
+  await request(app)
+    .post("/api/watch/push/unsubscribe")
+    .set("Authorization", `Bearer ${token}`)
+    .send({ endpoint: sub.endpoint })
+    .expect(200);
+
+  const { data: rows } = await supabase
+    .from("push_subscriptions")
+    .select("*")
+    .eq("endpoint", sub.endpoint);
+  assert.equal(rows.length, 0);
+});

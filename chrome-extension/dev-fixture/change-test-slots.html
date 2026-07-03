@@ -14,7 +14,7 @@
   #blocked-banner { display: none; background: #f3f2f1; border: 2px solid #d4351c; padding: 16px; margin-top: 16px; }
 </style>
 </head>
-<body>
+<body data-testid="availo-page-results">
   <h1>Change your driving test (dev fixture)</h1>
   <p>This is a hand-built local page for developing <code>chrome-extension/watch-content.js</code> against, without touching the real DVSA site. Add <code>?blocked=1</code> to the URL to simulate a block/CAPTCHA state instead of results.</p>
 
@@ -25,12 +25,12 @@
         <tr data-testid="availo-slot-row" data-slot-centre="Bolton" data-slot-datetime="2026-11-10T09:15:00.000Z">
           <td>Bolton</td>
           <td>10 Nov 2026, 09:15</td>
-          <td><button data-testid="availo-slot-hold" onclick="alert('Would submit the real DVSA hold form here.'); this.textContent='Held (fixture)'; this.disabled=true;">Book this test</button></td>
+          <td><button data-testid="availo-slot-select" onclick="alert('Would submit the real DVSA hold form here.'); this.textContent='Held (fixture)'; this.disabled=true;">Book this test</button></td>
         </tr>
         <tr data-testid="availo-slot-row" data-slot-centre="Manchester" data-slot-datetime="2026-11-12T13:00:00.000Z">
           <td>Manchester</td>
           <td>12 Nov 2026, 13:00</td>
-          <td><button data-testid="availo-slot-hold">Book this test</button></td>
+          <td><button data-testid="availo-slot-select">Book this test</button></td>
         </tr>
       </tbody>
     </table>

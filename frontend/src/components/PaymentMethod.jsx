@@ -64,50 +64,52 @@ export default function PaymentMethod({ token }) {
     setEditing(true);
   }
 
-  if (loading) return <p className="govuk-body">Loading payment details…</p>;
+  if (loading) return <p className="av-body">Loading payment details…</p>;
 
   return (
-    <div style={{ marginTop: 40 }}>
-      <h2 className="govuk-heading-m">Payment card</h2>
-      <p className="govuk-body-s" style={{ color: "#505a5f" }}>
+    <div>
+      <h2 className="av-heading-m">Payment card</h2>
+      <p className="av-body-s">
         Used only to secure a slot when auto-booking is on. We store a secure token — never your full card number.
       </p>
 
       {error && (
-        <div className="govuk-error-summary" role="alert">
-          <h2 className="govuk-error-summary__title">There is a problem</h2>
-          <ul className="govuk-error-summary__list"><li>{error}</li></ul>
+        <div className="av-error-summary" role="alert">
+          <h2 className="av-error-summary__title">There is a problem</h2>
+          <ul className="av-error-summary__list"><li>{error}</li></ul>
         </div>
       )}
 
       {card && !editing ? (
         <>
-          <dl className="govuk-summary-list">
-            <div className="govuk-summary-list__row">
-              <dt className="govuk-summary-list__key">Card</dt>
-              <dd className="govuk-summary-list__value">
+          <dl className="av-summary-list" style={{ marginBottom: 16 }}>
+            <div className="av-summary-list__row">
+              <dt className="av-summary-list__key">Card</dt>
+              <dd className="av-summary-list__value">
                 {BRAND_LABEL[card.card_brand] || card.card_brand} ending {card.card_last4}
               </dd>
             </div>
-            <div className="govuk-summary-list__row">
-              <dt className="govuk-summary-list__key">Expires</dt>
-              <dd className="govuk-summary-list__value">{card.card_exp}</dd>
+            <div className="av-summary-list__row">
+              <dt className="av-summary-list__key">Expires</dt>
+              <dd className="av-summary-list__value">{card.card_exp}</dd>
             </div>
           </dl>
-          <button className="govuk-button govuk-button--secondary" onClick={() => setEditing(true)}>Replace card</button>{" "}
-          <button className="govuk-button govuk-button--warning" onClick={remove}>Remove card</button>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button className="av-btn av-btn--secondary" onClick={() => setEditing(true)}>Replace card</button>
+            <button className="av-btn av-btn--danger" onClick={remove}>Remove card</button>
+          </div>
         </>
       ) : (
         <form onSubmit={submit} noValidate style={{ maxWidth: 420 }}>
-          <div className="govuk-form-group">
-            <label className="govuk-label" htmlFor="card_name">Name on card</label>
-            <input id="card_name" className="govuk-input" value={form.name} onChange={(e) => set("name", e.target.value)} />
+          <div className="av-form-group">
+            <label className="av-label" htmlFor="card_name">Name on card</label>
+            <input id="card_name" className="av-input" value={form.name} onChange={(e) => set("name", e.target.value)} />
           </div>
-          <div className="govuk-form-group">
-            <label className="govuk-label" htmlFor="card_number">Card number</label>
+          <div className="av-form-group">
+            <label className="av-label" htmlFor="card_number">Card number</label>
             <input
               id="card_number"
-              className="govuk-input"
+              className="av-input"
               inputMode="numeric"
               placeholder="4242 4242 4242 4242"
               value={form.number}
@@ -115,25 +117,27 @@ export default function PaymentMethod({ token }) {
             />
           </div>
           <div style={{ display: "flex", gap: 16 }}>
-            <div className="govuk-form-group">
-              <label className="govuk-label" htmlFor="exp_month">Expiry month</label>
-              <input id="exp_month" className="govuk-input govuk-input--width-3" inputMode="numeric" placeholder="MM" value={form.exp_month} onChange={(e) => set("exp_month", e.target.value)} />
+            <div className="av-form-group">
+              <label className="av-label" htmlFor="exp_month">Expiry month</label>
+              <input id="exp_month" className="av-input av-input--width-3" inputMode="numeric" placeholder="MM" value={form.exp_month} onChange={(e) => set("exp_month", e.target.value)} />
             </div>
-            <div className="govuk-form-group">
-              <label className="govuk-label" htmlFor="exp_year">Expiry year</label>
-              <input id="exp_year" className="govuk-input govuk-input--width-4" inputMode="numeric" placeholder="YYYY" value={form.exp_year} onChange={(e) => set("exp_year", e.target.value)} />
+            <div className="av-form-group">
+              <label className="av-label" htmlFor="exp_year">Expiry year</label>
+              <input id="exp_year" className="av-input av-input--width-4" inputMode="numeric" placeholder="YYYY" value={form.exp_year} onChange={(e) => set("exp_year", e.target.value)} />
             </div>
-            <div className="govuk-form-group">
-              <label className="govuk-label" htmlFor="cvc">CVC</label>
-              <input id="cvc" className="govuk-input govuk-input--width-3" inputMode="numeric" placeholder="123" value={form.cvc} onChange={(e) => set("cvc", e.target.value)} />
+            <div className="av-form-group">
+              <label className="av-label" htmlFor="cvc">CVC</label>
+              <input id="cvc" className="av-input av-input--width-3" inputMode="numeric" placeholder="123" value={form.cvc} onChange={(e) => set("cvc", e.target.value)} />
             </div>
           </div>
-          <button className="govuk-button" type="submit" disabled={saving}>
-            {saving ? "Saving…" : "Save card"}
-          </button>
-          {card && (
-            <>{" "}<button type="button" className="govuk-button govuk-button--secondary" onClick={() => setEditing(false)}>Cancel</button></>
-          )}
+          <div style={{ display: "flex", gap: 10 }}>
+            <button className="av-btn" type="submit" disabled={saving}>
+              {saving ? "Saving…" : "Save card"}
+            </button>
+            {card && (
+              <button type="button" className="av-btn av-btn--secondary" onClick={() => setEditing(false)}>Cancel</button>
+            )}
+          </div>
         </form>
       )}
     </div>

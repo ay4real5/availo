@@ -8,6 +8,16 @@ function fmtDateTime(iso) {
   });
 }
 
+function relativeTime(iso) {
+  if (!iso) return "just now";
+  const secs = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+  if (secs < 60) return "moments ago";
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins} min${mins === 1 ? "" : "s"} ago`;
+  const hrs = Math.round(mins / 60);
+  return `${hrs} hour${hrs === 1 ? "" : "s"} ago`;
+}
+
 export default function WatchStatus({ token }) {
   const [sessions, setSessions] = useState([]);
   const [alerts, setAlerts] = useState([]);
@@ -34,55 +44,68 @@ export default function WatchStatus({ token }) {
 
   const activeSession = sessions.find((s) => s.status === "active" && !s.is_stale);
   const staleSession = sessions.find((s) => s.status === "active" && s.is_stale);
+  const recentAlert = alerts.find((a) => a.payload && a.payload.slot_datetime);
 
   return (
-    <div style={{ marginTop: 40 }}>
-      <h2 className="govuk-heading-m">Watch &amp; Assist</h2>
-      <p className="govuk-body-s" style={{ color: "#505a5f" }}>
+    <div>
+      <h2 className="av-heading-m">Watch &amp; Assist</h2>
+      <p className="av-body-s">
         Install the Availo browser extension to watch the real DVSA "change your test" page yourself.
         It never books or holds anything on its own — it just alerts you the instant an earlier slot
         appears, and you click through to secure it yourself.
       </p>
 
       {loading ? (
-        <p className="govuk-body">Checking watch status…</p>
+        <p className="av-body">Checking watch status…</p>
       ) : activeSession ? (
-        <p className="govuk-body">
-          <strong className="govuk-tag govuk-tag--green">Watching now</strong>{" "}
-          {activeSession.test_centre} since {fmtDateTime(activeSession.started_at)}
-        </p>
+        <div className="av-note">
+          <p className="av-body" style={{ margin: "0 0 4px" }}>
+            <span className="av-tag av-tag--success">Watching now</span>
+          </p>
+          <p className="av-body" style={{ margin: 0 }}>
+            You can stop checking — Availo is watching <strong>{activeSession.test_centre}</strong> for you.
+            {" "}<span style={{ color: "var(--muted)" }}>Last checked {relativeTime(activeSession.last_seen_at)}.</span>
+          </p>
+          {recentAlert ? (
+            <p className="av-body-s" style={{ margin: "6px 0 0" }}>
+              We already spotted one for you {relativeTime(recentAlert.created_at)} — check your alerts below.
+            </p>
+          ) : (
+            <p className="av-body-s" style={{ margin: "6px 0 0", color: "var(--muted)" }}>
+              No earlier slots right now — that's normal. We'll reach you the second one appears.
+            </p>
+          )}
+        </div>
       ) : staleSession ? (
-        <p className="govuk-body">
-          <strong className="govuk-tag govuk-tag--yellow">Watching may have stopped</strong>{" "}
-          No update from the extension since {fmtDateTime(staleSession.last_seen_at)}. Check the tab is still open.
+        <p className="av-body">
+          <span className="av-tag av-tag--warning">Watching may have paused</span>{" "}
+          No update since {fmtDateTime(staleSession.last_seen_at)} — just check the DVSA tab is still open, and you're covered again.
         </p>
       ) : (
-        <p className="govuk-body">
-          <strong className="govuk-tag govuk-tag--grey">Not currently watching</strong>{" "}
-          Open the real DVSA page and click "Start watching" in the extension popup.
+        <p className="av-body">
+          <span className="av-tag av-tag--neutral">Not currently watching</span>{" "}
+          Open the real DVSA page and click "Start watching" in the extension popup — then you can put it out of your mind.
         </p>
       )}
 
       {sessions.length > 0 && (
-        <details className="govuk-details" style={{ marginTop: 10 }}>
-          <summary className="govuk-details__summary">
-            <span className="govuk-details__summary-text">Watch session history</span>
-          </summary>
-          <div className="govuk-details__text">
-            <table className="govuk-table">
-              <thead className="govuk-table__head">
-                <tr className="govuk-table__row">
-                  <th className="govuk-table__header" scope="col">Centre</th>
-                  <th className="govuk-table__header" scope="col">Started</th>
-                  <th className="govuk-table__header" scope="col">Status</th>
+        <details className="av-details">
+          <summary>Watch session history</summary>
+          <div className="av-details__body">
+            <table className="av-table">
+              <thead>
+                <tr>
+                  <th scope="col">Centre</th>
+                  <th scope="col">Started</th>
+                  <th scope="col">Status</th>
                 </tr>
               </thead>
-              <tbody className="govuk-table__body">
+              <tbody>
                 {sessions.map((s) => (
-                  <tr key={s.id} className="govuk-table__row">
-                    <td className="govuk-table__cell">{s.test_centre}</td>
-                    <td className="govuk-table__cell">{fmtDateTime(s.started_at)}</td>
-                    <td className="govuk-table__cell">{s.status === "ended" ? "Ended" : s.is_stale ? "Stale" : "Active"}</td>
+                  <tr key={s.id}>
+                    <td>{s.test_centre}</td>
+                    <td>{fmtDateTime(s.started_at)}</td>
+                    <td>{s.status === "ended" ? "Ended" : s.is_stale ? "Stale" : "Active"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -92,15 +115,13 @@ export default function WatchStatus({ token }) {
       )}
 
       {alerts.length > 0 && (
-        <details className="govuk-details" style={{ marginTop: 10 }}>
-          <summary className="govuk-details__summary">
-            <span className="govuk-details__summary-text">Backup alert history</span>
-          </summary>
-          <div className="govuk-details__text">
-            <p className="govuk-body-s" style={{ color: "#505a5f" }}>
+        <details className="av-details">
+          <summary>Backup alert history</summary>
+          <div className="av-details__body">
+            <p className="av-body-s">
               We send a backup email whenever the extension finds a slot while you weren't actively watching.
             </p>
-            <ul className="govuk-list govuk-list--bullet">
+            <ul className="av-list">
               {alerts.map((a) => (
                 <li key={a.id}>
                   {a.event_type === "watch_backup_alert_sent" ? "Backup email sent" : "Slot detected"} —{" "}
