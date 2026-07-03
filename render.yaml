@@ -14,7 +14,13 @@ services:
     runtime: node
     rootDir: backend
     plan: free
-    buildCommand: npm ci
+    # This is an npm-workspaces monorepo with a SINGLE lockfile at the repo root,
+    # so `npm ci` must run from the root (not inside backend/, which has no
+    # lockfile — that's what made earlier builds fail). We cd up to install, then
+    # the start command runs with cwd=backend (rootDir) so cwd-relative loads
+    # like config/rules.json still resolve, and hoisted root node_modules are
+    # found by Node's normal upward resolution.
+    buildCommand: cd .. && npm ci
     startCommand: node src/index.js
     healthCheckPath: /health
     autoDeploy: true
