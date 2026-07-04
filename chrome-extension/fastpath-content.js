@@ -8,16 +8,14 @@
   //     land on results and REVEAL the earliest matching slot (scroll + ring).
   //     It never clicks Select/Confirm/Pay — those stay the human's.
   //
-  // Selectors come from selectors.js; matching from fastpath-util.js /
-  // watch-match.js. All loaded before this file in manifest.json.
+  // Page elements are found by AvailoResolve (selectors.js), which auto-detects
+  // the real DVSA GOV.UK markup; matching from fastpath-util.js / watch-match.js.
+  // All loaded before this file in manifest.json.
 
-  const S = AVAILO_SELECTORS;
   const BANNER_ID = "availo-fastpath-banner";
 
-  function fillField(sel, value) {
-    if (!value) return false;
-    const el = document.querySelector(sel);
-    if (!el || el.value) return false; // don't clobber anything the user typed
+  function fillElement(el, value) {
+    if (!el || !value || el.value) return false; // don't clobber what the user typed
     el.focus();
     el.value = value;
     el.dispatchEvent(new Event("input", { bubbles: true }));
@@ -26,38 +24,40 @@
   }
 
   function fillLogin(vault) {
-    let any = fillField(S.login.licenceField, vault.licence);
-    any = fillField(S.login.bookingRefField, vault.bookingRef) || any;
+    const f = AvailoResolve.loginFields(document);
+    let any = fillElement(f.licence, vault.licence);
+    any = fillElement(f.bookingRef, vault.bookingRef) || any;
     return any;
   }
 
   function fillSearch(vault) {
-    let any = fillField(S.search.centreField, vault.centre);
-    any = fillField(S.search.dateFromField, vault.dateFrom) || any;
-    any = fillField(S.search.dateToField, vault.dateTo) || any;
+    const f = AvailoResolve.searchFields(document);
+    let any = fillElement(f.centre, vault.centre);
+    any = fillElement(f.dateFrom, vault.dateFrom) || any;
+    any = fillElement(f.dateTo, vault.dateTo) || any;
     return any;
   }
 
   // Clicking "Sign in" (the user's own credentials) and "Search" (a read-only
   // query) is exactly what the human does and reserves nothing. This is the
   // only place Fast-Path clicks anything, and never the slot's Select control.
-  function clickSubmit(sel) {
-    const btn = document.querySelector(sel);
-    if (!btn) return false;
-    btn.click();
+  function clickEl(el) {
+    if (!el) return false;
+    el.click();
     return true;
   }
 
   // Fresh scan → ranked still-present matches (earliest first). Confidence
   // pre-check + next-best both fall out of always reading the live DOM here.
+  // Rows with no per-row centre (a real DVSA results page) are attributed to
+  // the centre being searched.
   function currentRankedRows(prefs) {
-    const rows = [...document.querySelectorAll(S.results.slotRow)]
-      .map((el) => ({
-        el,
-        centre: el.getAttribute(S.results.slotCentreAttr),
-        datetime: el.getAttribute(S.results.slotDatetimeAttr),
-      }))
-      .filter((r) => r.centre && r.datetime);
+    const rows = AvailoResolve.resultRows(document).map((r) => ({
+      el: r.el,
+      selectEl: r.selectEl,
+      centre: r.centre || (prefs && prefs.centre) || "",
+      datetime: r.datetime,
+    }));
 
     return availoRankMatches(rows.map(({ centre, datetime }) => ({ centre, datetime })), prefs)
       .map((m) => rows.find((r) => r.centre === m.centre && r.datetime === m.datetime))
@@ -71,7 +71,7 @@
       showGone();
       return false;
     }
-    const control = target.el.querySelector(S.results.slotSelectButton) || target.el;
+    const control = target.selectEl || target.el;
     control.scrollIntoView({ behavior: "smooth", block: "center" });
     control.style.outline = "3px solid #e0932a";
     control.style.outlineOffset = "3px";
@@ -119,21 +119,21 @@
     const { active, vault, prefs } = ctx;
 
     // A block/challenge stops Fast-Path outright — never evade it.
-    if (document.querySelector(S.results.blockedMarker)) {
+    if (AvailoResolve.blocked(document)) {
       chrome.runtime.sendMessage({ type: "FASTPATH_BLOCKED", page_url: window.location.href });
       chrome.runtime.sendMessage({ type: "FASTPATH_DONE" });
       return;
     }
 
-    const page = availoDetectPage();
+    const page = AvailoResolve.page(document);
     if (!page || !vault) return;
 
     if (page === "login") {
       fillLogin(vault);
-      if (active) clickSubmit(S.login.submitButton);
+      if (active) clickEl(AvailoResolve.loginFields(document).submit);
     } else if (page === "search") {
       fillSearch(vault);
-      if (active) clickSubmit(S.search.submitButton);
+      if (active) clickEl(AvailoResolve.searchFields(document).submit);
     } else if (page === "results") {
       if (active) {
         revealMatch(prefs);

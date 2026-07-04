@@ -36,6 +36,47 @@ function practiceLink() {
   return btn;
 }
 
+// Plain-language summary of what the extension can see on the current page —
+// so a non-technical user can confirm it's working without any DevTools.
+function describeDiagnosis(d) {
+  if (!d) return "Couldn't check this page. Try reloading it, then check again.";
+  if (d.blocked) return "⚠ DVSA is showing a challenge or error here. Availo pauses on these pages — please continue manually.";
+  if (d.page === "results") {
+    return d.rowCount > 0
+      ? `✓ Availo can read this page — it can see ${d.rowCount} available date${d.rowCount === 1 ? "" : "s"}.`
+      : "This looks like the results page, but Availo can't see any available dates yet.";
+  }
+  if (d.page === "login") {
+    const ok = d.login.licence && d.login.bookingRef;
+    return ok
+      ? "✓ This is the sign-in page. Availo can fill your licence and booking reference for you."
+      : "This looks like the sign-in page, but Availo couldn't find both fields to fill.";
+  }
+  if (d.page === "search") return "✓ This is the find-a-test page. Availo can fill your search.";
+  return "This doesn't look like the DVSA change-test pages yet. Open your list of available tests, then check again.";
+}
+
+function diagnosticControls(tab) {
+  const container = document.createElement("div");
+  const btn = document.createElement("button");
+  btn.className = "link";
+  btn.textContent = "Check this page";
+  const result = document.createElement("div");
+  result.className = "status idle";
+  result.style.display = "none";
+  result.style.marginTop = "8px";
+  btn.addEventListener("click", async () => {
+    result.style.display = "block";
+    result.textContent = "Checking…";
+    let d = null;
+    try { d = await chrome.tabs.sendMessage(tab.id, { type: "DIAGNOSE" }); } catch { d = null; }
+    result.textContent = describeDiagnosis(d);
+  });
+  container.appendChild(btn);
+  container.appendChild(result);
+  return container;
+}
+
 async function render() {
   const tab = await getCurrentTab();
   if (!tab) { appEl.textContent = "No active tab."; return; }
@@ -109,6 +150,7 @@ async function render() {
       wrap.appendChild(addBtn);
     }
 
+    wrap.appendChild(diagnosticControls(tab));
     wrap.appendChild(practiceLink());
     appEl.appendChild(wrap);
     return;
@@ -142,6 +184,7 @@ async function render() {
   });
   wrap.appendChild(stopBtn);
 
+  wrap.appendChild(diagnosticControls(tab));
   wrap.appendChild(practiceLink());
   appEl.appendChild(wrap);
 }

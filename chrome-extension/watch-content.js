@@ -7,10 +7,9 @@
   // THEY can click it. If DVSA challenges or blocks this tab, we stop and tell
   // the user (reportBlocked). See docs/ARCHITECTURE.md §9.
   //
-  // All DVSA-DOM selectors come from selectors.js (AVAILO_SELECTORS), loaded
-  // before this file in manifest.json.
+  // Page elements are found by AvailoResolve (selectors.js), which auto-detects
+  // the real DVSA GOV.UK markup — loaded before this file in manifest.json.
 
-  const R = AVAILO_SELECTORS.results;
   const RESCAN_INTERVAL_MS = 4000;
   const BANNER_ID = "availo-watch-banner";
   const HIGHLIGHT_CLASS = "availo-slot-highlight";
@@ -29,13 +28,15 @@
   // first). Everything reads current reality, never a stale cached row — that's
   // the confidence pre-check that stops us pointing at a ghost slot.
   function currentRankedRows() {
-    const rows = [...document.querySelectorAll(R.slotRow)]
-      .map((el) => ({
-        el,
-        centre: el.getAttribute(R.slotCentreAttr),
-        datetime: el.getAttribute(R.slotDatetimeAttr),
-      }))
-      .filter((r) => r.centre && r.datetime);
+    // A real DVSA results page shows one centre's dates, so rows carry no
+    // per-row centre — attribute them to the centre we're watching. (The fixture
+    // does tag per-row centre, which is respected.)
+    const rows = AvailoResolve.resultRows(document).map((r) => ({
+      el: r.el,
+      selectEl: r.selectEl,
+      centre: r.centre || (prefs && prefs.centre) || "",
+      datetime: r.datetime,
+    }));
 
     const ranked = availoRankMatches(
       rows.map(({ centre, datetime }) => ({ centre, datetime })),
@@ -53,7 +54,7 @@
   function scanForSlots() {
     if (!watching) return;
 
-    if (document.querySelector(R.blockedMarker)) {
+    if (AvailoResolve.blocked(document)) {
       reportBlocked("challenge_or_block_marker_present");
       stopWatchingLocally();
       return;
@@ -66,7 +67,7 @@
 
   function offerSlot(rowInfo, { count = 1 } = {}) {
     lastDetectionKey = `${rowInfo.centre}|${rowInfo.datetime}`;
-    activeSelectElement = rowInfo.el.querySelector(R.slotSelectButton) || rowInfo.el;
+    activeSelectElement = rowInfo.selectEl || rowInfo.el;
     activeSlotInfo = { centre: rowInfo.centre, datetime: rowInfo.datetime };
 
     chrome.runtime.sendMessage({
@@ -144,7 +145,7 @@
     }
 
     activeSlotInfo = { centre: target.centre, datetime: target.datetime };
-    activeSelectElement = target.el.querySelector(R.slotSelectButton) || target.el;
+    activeSelectElement = target.selectEl || target.el;
     lastDetectionKey = `${target.centre}|${target.datetime}`;
 
     chrome.runtime.sendMessage({
@@ -212,13 +213,17 @@
     removeBanner();
   }
 
-  chrome.runtime.onMessage.addListener((message) => {
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message.type === "WATCH_START") {
       startWatching({ centre: message.centre, targetDate: message.targetDate });
     } else if (message.type === "WATCH_STOP") {
       stopWatchingLocally();
     } else if (message.type === "REVEAL_SLOT") {
       revealSlot();
+    } else if (message.type === "DIAGNOSE") {
+      // The popup's "Check this page" self-test — report what we can read.
+      sendResponse(AvailoResolve.diagnose(document));
+      return true;
     }
   });
 })();

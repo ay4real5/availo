@@ -4,38 +4,41 @@
 <meta charset="utf-8" />
 <title>Available tests (practice)</title>
 <style>
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 640px; margin: 40px auto; color: #0b0c0c; padding: 0 16px; }
-  h1 { border-bottom: 4px solid #2f6f62; padding-bottom: 8px; }
-  table { width: 100%; border-collapse: collapse; margin-top: 16px; }
-  th, td { text-align: left; padding: 12px 10px; border-bottom: 1px solid #b1b4b6; }
-  button { padding: 9px 16px; background: #2f6f62; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; }
+  body { font-family: "GDS Transport", arial, sans-serif; max-width: 640px; margin: 40px auto; color: #0b0c0c; padding: 0 16px; }
+  h1 { font-size: 2rem; }
+  .govuk-table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+  .govuk-table__header, .govuk-table__cell { text-align: left; padding: 12px 10px; border-bottom: 1px solid #b1b4b6; }
+  .govuk-button { padding: 9px 16px; background: #00703c; color: #fff; border: 2px solid transparent; box-shadow: 0 2px 0 #002d18; cursor: pointer; font-weight: 700; }
   .practice { background: #fbf0dd; border: 1px solid #e0932a; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 20px; }
-  #blocked { display: none; background: #fbeae6; border: 2px solid #c24e3a; padding: 16px; border-radius: 8px; margin-top: 16px; }
+  .govuk-error-summary { display: none; border: 5px solid #d4351c; padding: 16px; margin-top: 16px; }
   #confirm { display: none; background: #e4f0ec; border: 2px solid #2f6f62; padding: 16px; border-radius: 8px; margin-top: 20px; }
+  /* The rows below deliberately use only GOV.UK markup + real date text and a
+     "Book this test" button — no data-testid — so the extension's heuristics
+     (date parsing + button-text matching) are what's exercised, exactly as on
+     the real DVSA results page. */
 </style>
 </head>
 <body data-testid="availo-page-results">
-  <div class="practice">🛟 <strong>Practice mode.</strong> Fast-Path highlighted the earliest matching slot. Click <strong>Select</strong> — that's the click you'll do for real. It never books anything here.</div>
-  <h1>Available tests</h1>
+  <div class="practice">🛟 <strong>Practice mode.</strong> Fast-Path highlighted the earliest matching slot. Click <strong>Book this test</strong> — that's the click you'll do for real. It never books anything here.</div>
+  <h1>Available tests at Bolton</h1>
 
   <div id="results">
-    <table>
-      <thead><tr><th>Centre</th><th>Date &amp; time</th><th>Action</th></tr></thead>
-      <tbody>
-        <tr data-testid="availo-slot-row" data-slot-centre="Bolton" data-slot-datetime="2026-11-10T09:15:00.000Z">
-          <td>Bolton</td>
-          <td>10 Nov 2026, 09:15</td>
-          <td><button data-testid="availo-slot-select" onclick="showConfirm(this)">Select</button></td>
+    <table class="govuk-table">
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row"><th class="govuk-table__header">Date and time</th><th class="govuk-table__header">Action</th></tr>
+      </thead>
+      <tbody class="govuk-table__body">
+        <tr class="govuk-table__row">
+          <td class="govuk-table__cell">Tuesday 10 November 2026, 9:15am</td>
+          <td class="govuk-table__cell"><button class="govuk-button" onclick="showConfirm()">Book this test</button></td>
         </tr>
-        <tr data-testid="availo-slot-row" data-slot-centre="Bolton" data-slot-datetime="2026-11-24T13:00:00.000Z">
-          <td>Bolton</td>
-          <td>24 Nov 2026, 13:00</td>
-          <td><button data-testid="availo-slot-select" onclick="showConfirm(this)">Select</button></td>
+        <tr class="govuk-table__row">
+          <td class="govuk-table__cell">Tuesday 24 November 2026, 1:00pm</td>
+          <td class="govuk-table__cell"><button class="govuk-button" onclick="showConfirm()">Book this test</button></td>
         </tr>
-        <tr data-testid="availo-slot-row" data-slot-centre="Manchester" data-slot-datetime="2026-11-12T13:00:00.000Z">
-          <td>Manchester</td>
-          <td>12 Nov 2026, 13:00</td>
-          <td><button data-testid="availo-slot-select" onclick="showConfirm(this)">Select</button></td>
+        <tr class="govuk-table__row">
+          <td class="govuk-table__cell">Friday 4 December 2026, 11:30am</td>
+          <td class="govuk-table__cell"><button class="govuk-button" onclick="showConfirm()">Book this test</button></td>
         </tr>
       </tbody>
     </table>
@@ -45,8 +48,10 @@
     <strong>Nicely done.</strong> On the real site this is where you'd confirm and pay — all you. You've now rehearsed the whole thing.
   </div>
 
-  <div id="blocked" data-testid="availo-blocked">
-    <strong>Sorry, there is a problem with the service</strong>
+  <!-- ?blocked=1 swaps in a real GOV.UK error-summary; the extension detects the
+       "Sorry, there is a problem" wording and stops, no testid needed. -->
+  <div class="govuk-error-summary" id="blocked" role="alert">
+    <h2>Sorry, there is a problem with the service</h2>
     <p>Please try again later. (Simulated block/CAPTCHA — Fast-Path stops here and hands back to you.)</p>
   </div>
 
