@@ -589,3 +589,58 @@ test("push unsubscribe removes the caller's subscription", async () => {
     .eq("endpoint", sub.endpoint);
   assert.equal(rows.length, 0);
 });
+
+test("POST /api/watch/events signed_out alerts the user and dedupes within 30 min", async () => {
+  const token = await registerUser("signedout1@example.com");
+  await request(app)
+    .post("/api/auth/preferences")
+    .set("Authorization", `Bearer ${token}`)
+    .send({ centre: "Bolton", notify_email: true })
+    .expect(200);
+  const session = await request(app)
+    .post("/api/watch/sessions")
+    .set("Authorization", `Bearer ${token}`)
+    .send({ centre: "Bolton" })
+    .expect(201);
+
+  // Requires auth
+  await request(app)
+    .post("/api/watch/events")
+    .send({ event_type: "signed_out", watch_session_id: session.body.id })
+    .expect(401);
+
+  await request(app)
+    .post("/api/watch/events")
+    .set("Authorization", `Bearer ${token}`)
+    .send({ event_type: "signed_out", watch_session_id: session.body.id })
+    .expect(201);
+
+  // A second sign-out within the window doesn't re-alert.
+  await request(app)
+    .post("/api/watch/events")
+    .set("Authorization", `Bearer ${token}`)
+    .send({ event_type: "signed_out", watch_session_id: session.body.id })
+    .expect(201);
+
+  const audit = await request(app)
+    .get("/api/audit")
+    .query({ event_type: "signed_out_alert_sent" })
+    .expect(200);
+  assert.equal(audit.body.logs.length, 1);
+});
+
+test("signed_out rejects another user's session", async () => {
+  const tokenA = await registerUser("signedout2a@example.com");
+  const tokenB = await registerUser("signedout2b@example.com");
+  const session = await request(app)
+    .post("/api/watch/sessions")
+    .set("Authorization", `Bearer ${tokenA}`)
+    .send({ centre: "Bolton" })
+    .expect(201);
+
+  await request(app)
+    .post("/api/watch/events")
+    .set("Authorization", `Bearer ${tokenB}`)
+    .send({ event_type: "signed_out", watch_session_id: session.body.id })
+    .expect(404);
+});

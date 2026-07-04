@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert");
 const {
-  parseSlotDateTime, looksLikeBlock, labelMatchesKind, buttonMatchesAction,
+  parseSlotDateTime, looksLikeBlock, looksLoggedOut, labelMatchesKind, buttonMatchesAction,
 } = require("../dvsa-heuristics.js");
 
 test("parseSlotDateTime: full GOV.UK wording with am time", () => {
@@ -46,6 +46,20 @@ test("looksLikeBlock: recognises common block/challenge wording", () => {
 test("looksLikeBlock: normal results page is not a block", () => {
   assert.equal(looksLikeBlock("Available tests at Bolton — Monday 10 November 2026"), false);
   assert.equal(looksLikeBlock(""), false);
+});
+
+test("looksLoggedOut: recognises DVSA sign-out / session-expiry wording", () => {
+  assert.equal(looksLoggedOut("You have been signed out"), true);
+  assert.equal(looksLoggedOut("Your session has expired"), true);
+  assert.equal(looksLoggedOut("Your session has timed out. Please sign in again."), true);
+  assert.equal(looksLoggedOut("For your security, we've signed you out"), true);
+  assert.equal(looksLoggedOut("Sign in to continue"), true);
+});
+
+test("looksLoggedOut: a normal results page is not a sign-out", () => {
+  assert.equal(looksLoggedOut("Available tests at Bolton — Monday 10 November 2026"), false);
+  assert.equal(looksLoggedOut(""), false);
+  assert.equal(looksLoggedOut(null), false);
 });
 
 test("labelMatchesKind: licence and booking-ref by label text", () => {

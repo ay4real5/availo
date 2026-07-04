@@ -21,6 +21,7 @@
   let lastDetectionKey = null;
   let activeSelectElement = null;
   let activeSlotInfo = null; // { datetime, centre }
+  let loggedOutReported = false;
 
   ensureHighlightStyle();
 
@@ -59,6 +60,18 @@
       stopWatchingLocally();
       return;
     }
+
+    // Signed out? Don't silently watch a login page — alert the user (once) and
+    // wait. Watching stays active so it resumes automatically once they sign in.
+    if (AvailoResolve.loggedOut(document)) {
+      if (!loggedOutReported) {
+        loggedOutReported = true;
+        chrome.runtime.sendMessage({ type: "SIGNED_OUT", page_url: window.location.href });
+        infoBanner("<strong>DVSA signed you out.</strong><br>Your details are filled in — click <strong>Sign in</strong> to keep Availo watching.");
+      }
+      return;
+    }
+    loggedOutReported = false; // back on a real page — re-arm for a future sign-out
 
     const ranked = currentRankedRows();
     const next = ranked.find((r) => `${r.centre}|${r.datetime}` !== lastDetectionKey);
@@ -204,6 +217,7 @@
     lastDetectionKey = null;
     activeSelectElement = null;
     activeSlotInfo = null;
+    loggedOutReported = false;
 
     observer = new MutationObserver(() => scanForSlots());
     observer.observe(document.body, { childList: true, subtree: true });
@@ -255,7 +269,7 @@
         stopWatchingLocally();
         return;
       }
-      if (!AvailoResolve.page(document)) return;
+      if (AvailoResolve.page(document) !== "results") return;
       window.location.reload();
     } else if (message.type === "DIAGNOSE") {
       // The popup's "Check this page" self-test — report what we can read.

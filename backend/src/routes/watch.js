@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { supabase } from "../lib/supabase.js";
 import { logAudit } from "../lib/audit.js";
-import { sendSlotAlert } from "../lib/email.js";
+import { sendSlotAlert, sendSignedOutEmail } from "../lib/email.js";
 import { sendPush, getVapidPublicKey } from "../lib/push.js";
 import { requireAuth } from "./auth.js";
 import { rateLimit, clientIp } from "../middleware/rateLimit.js";
@@ -235,6 +235,10 @@ const eventSchema = z.discriminatedUnion("event_type", [
     reason: z.string().optional().nullable(),
     page_url: z.string().optional().nullable(),
   }),
+  z.object({
+    event_type: z.literal("signed_out"),
+    watch_session_id: z.string().uuid(),
+  }),
 ]);
 
 async function sendBackupAlertIfDue(user, testCentre, slot) {
@@ -386,6 +390,22 @@ watchRouter.post("/events", requireAuth, eventsLimiter, async (req, res, next) =
       return res.status(201).json({ ok: true });
     }
 
+    if (event.event_type === "signed_out") {
+      const { data: user } = await supabase
+        .from("users")
+        .select("id, email, name")
+        .eq("id", req.userId)
+        .single();
+      if (user) {
+        try {
+          await sendSignedOutAlertIfDue(user, session.test_centre);
+        } catch (alertErr) {
+          console.error("[watch] signed-out alert flow error:", alertErr.message);
+        }
+      }
+      return res.status(201).json({ ok: true });
+    }
+
     // blocked
     await logAudit("extension_blocked", {
       entityId: req.userId,
@@ -398,3 +418,46 @@ watchRouter.post("/events", requireAuth, eventsLimiter, async (req, res, next) =
     next(err);
   }
 });
+
+// Tell the user (push + email) that DVSA signed them out, so they can come back
+// and sign in. Own 30-min dedupe so a flapping session doesn't spam them.
+async function sendSignedOutAlertIfDue(user, testCentre) {
+  const { data: prefs } = await supabase
+    .from("user_preferences")
+    .select("notify_email")
+    .eq("user_id", user.id)
+    .single();
+
+  const thirtyMinsAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+  const { data: recent } = await supabase
+    .from("audit_log")
+    .select("id")
+    .eq("event_type", "signed_out_alert_sent")
+    .eq("entity_id", user.id)
+    .gt("created_at", thirtyMinsAgo)
+    .limit(1);
+  if (recent && recent.length > 0) return;
+
+  const centre = testCentre || "your test centre";
+  let emailResult = { skipped: true };
+  if (!prefs || prefs.notify_email !== false) {
+    try {
+      emailResult = await sendSignedOutEmail({ to: user.email, userName: user.name, centre });
+    } catch (sendErr) {
+      emailResult = { error: sendErr.message };
+    }
+  }
+
+  const pushResult = await sendPushToUser(user.id, {
+    title: "Availo stopped — you were signed out of DVSA",
+    body: `Sign back in at ${centre} to keep watching. Your details are pre-filled.`,
+    url: "https://www.gov.uk/change-driving-test",
+  });
+
+  await logAudit("signed_out_alert_sent", {
+    entityId: user.id,
+    entityType: "user",
+    actor: "system",
+    payload: { centre, email_id: emailResult.id || null, push_sent: pushResult.sent, push_total: pushResult.total },
+  });
+}

@@ -23,6 +23,7 @@ const AvailoResolve = (() => {
     : {
         parseSlotDateTime: (t) => (typeof parseSlotDateTime === "function" ? parseSlotDateTime(t) : null),
         looksLikeBlock: (t) => (typeof looksLikeBlock === "function" ? looksLikeBlock(t) : false),
+        looksLoggedOut: (t) => (typeof looksLoggedOut === "function" ? looksLoggedOut(t) : false),
         labelMatchesKind: (t, k) => (typeof labelMatchesKind === "function" ? labelMatchesKind(t, k) : false),
         buttonMatchesAction: (t, a) => (typeof buttonMatchesAction === "function" ? buttonMatchesAction(t, a) : false),
       };
@@ -76,6 +77,14 @@ const AvailoResolve = (() => {
   function blocked(doc = document) {
     if (testid(doc, "availo-blocked")) return true;
     return H.looksLikeBlock(bodyText(doc));
+  }
+
+  // Has DVSA signed the user out? True on the sign-in page or a session-expired
+  // page. Used to alert the user instead of silently watching a login page.
+  function loggedOut(doc = document) {
+    if (testid(doc, "availo-logged-out")) return true;
+    if (H.looksLoggedOut(bodyText(doc))) return true;
+    return page(doc) === "login";
   }
 
   // Rows on the results page: each has a parseable date/time and its own
@@ -142,13 +151,14 @@ const AvailoResolve = (() => {
     return {
       page: p,
       blocked: blocked(doc),
+      loggedOut: loggedOut(doc),
       login: { licence: !!login.licence, bookingRef: !!login.bookingRef, submit: !!login.submit },
       search: { centre: !!search.centre, dateFrom: !!search.dateFrom, submit: !!search.submit },
       rowCount: rows.length,
     };
   }
 
-  return { page, loginFields, searchFields, resultRows, blocked, diagnose };
+  return { page, loginFields, searchFields, resultRows, blocked, loggedOut, diagnose };
 })();
 
 if (typeof module !== "undefined" && module.exports) {

@@ -235,3 +235,49 @@ export async function sendWelcomeEmail({ to, userName, centre }) {
     return { error: err.message };
   }
 }
+
+export async function sendSignedOutEmail({ to, userName, centre }) {
+  const resend = getResend();
+  if (!resend) {
+    console.log(`[email] RESEND_API_KEY not set — would send signed-out notice to ${to}`);
+    return { skipped: true };
+  }
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><title>Sign back in to keep watching</title></head>
+<body style="margin:0;padding:0;background:#f3f7f2;font-family:arial,sans-serif;color:#232a22;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#2f6f62;">
+    <tr><td style="padding:15px 30px;"><span style="color:#fff;font-size:22px;font-weight:700;">Availo</span></td></tr>
+  </table>
+  <table width="100%" cellpadding="0" cellspacing="0">
+    <tr><td style="padding:30px;">
+      <h1 style="font-size:24px;font-weight:700;margin:0 0 20px;">You've been signed out of DVSA</h1>
+      <p style="font-size:16px;margin:0 0 15px;">Hi ${userName || "there"},</p>
+      <p style="font-size:16px;margin:0 0 15px;">
+        DVSA signed you out${centre ? ` (watching <strong>${centre}</strong>)` : ""}, so Availo has paused.
+        Sign back in and watching resumes automatically — your details are pre-filled, so it's one click.
+      </p>
+      <p style="margin:0 0 25px;">
+        <a href="https://www.gov.uk/change-driving-test" style="display:inline-block;background:#2f6f62;color:#fff;text-decoration:none;padding:12px 22px;border-radius:999px;font-weight:700;">Open DVSA and sign in</a>
+      </p>
+      <p style="font-size:14px;color:#67766c;margin:0;">Availo never books or holds a slot for you — not affiliated with DVSA or GOV.UK.</p>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  try {
+    const { data, error } = await resend.emails.send({
+      from: getFrom(),
+      to,
+      subject: "Sign back in to keep Availo watching",
+      html,
+    });
+    if (error) return { error };
+    console.log(`[email] Sent signed-out notice to ${to} — id=${data.id}`);
+    return { id: data.id };
+  } catch (err) {
+    return { error: err.message };
+  }
+}

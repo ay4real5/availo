@@ -80,6 +80,11 @@ You don't have to sit and watch. Set it going and get on with your day:
 **Availo never books or holds the slot for you.** You always make the booking —
 that's what keeps your account safe.
 
+**If DVSA signs you out** (it does this after a while of inactivity), Availo
+**tells you** — on screen, by email, and on your phone — instead of silently
+watching a dead page. Sign back in (your details are pre-filled, so it's one
+click) and watching resumes automatically.
+
 ### The auto-refresh setting (please read)
 On the extension settings page you can turn **Auto-refresh** on/off and set how
 often. Keep it **slow (90+ seconds)** — refreshing too fast looks like a bot to

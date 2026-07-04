@@ -79,6 +79,20 @@ function looksLikeBlock(text) {
   );
 }
 
+// Does this page text read like DVSA signed the user out / the session expired?
+function looksLoggedOut(text) {
+  if (!text || typeof text !== "string") return false;
+  const t = text.toLowerCase();
+  return (
+    /you(?:'ve| have)?\s+been\s+signed\s+out/.test(t) ||
+    /(?:your\s+)?session\s+has\s+(?:expired|timed\s*out|ended)/.test(t) ||
+    /signed\s+out\s+(?:for|due\s+to)\s+(?:your\s+security|inactivity)/.test(t) ||
+    /for\s+your\s+security,?\s+we(?:'ve| have)?\s+signed\s+you\s+out/.test(t) ||
+    /sign\s+in\s+to\s+continue/.test(t) ||
+    /your\s+session\s+has\s+expired/.test(t)
+  );
+}
+
 const LABEL_KEYWORDS = {
   licence: [/driving\s*licence/i, /licence\s*number/i, /\blicence\b/i, /\blicense\b/i],
   bookingRef: [/booking\s*reference/i, /reference\s*number/i, /application\s*reference/i, /\breference\b/i, /\bbooking\b/i],
@@ -112,5 +126,5 @@ function buttonMatchesAction(text, action) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { parseSlotDateTime, looksLikeBlock, labelMatchesKind, buttonMatchesAction };
+  module.exports = { parseSlotDateTime, looksLikeBlock, looksLoggedOut, labelMatchesKind, buttonMatchesAction };
 }

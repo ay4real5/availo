@@ -256,6 +256,22 @@ async function handleWatchMessage(message, sender, sendResponse) {
         break;
       }
 
+      case "SIGNED_OUT": {
+        const tabId = sender.tab?.id;
+        const watch = await getWatch(tabId);
+        if (!watch) { sendResponse({ ok: false, error: "not_watching" }); break; }
+        // Tell the user (they may be away) — desktop + phone/email via backend.
+        notifySignedOut(tabId, watch.centre);
+        try {
+          await apiFetch("/api/watch/events", {
+            method: "POST",
+            body: { event_type: "signed_out", watch_session_id: watch.sessionId },
+          });
+        } catch { /* alert already shown on-device; backend push is best-effort */ }
+        sendResponse({ ok: true });
+        break;
+      }
+
       case "BLOCKED": {
         const tabId = sender.tab?.id;
         const watch = await getWatch(tabId);
@@ -310,6 +326,19 @@ function notifyDetection(tabId, centre, slotDatetime) {
   });
   chrome.action.setBadgeText({ tabId, text: "!" });
   chrome.action.setBadgeBackgroundColor({ tabId, color: "#e0932a" });
+}
+
+function notifySignedOut(tabId, centre) {
+  chrome.notifications.create(`availo-signedout-${tabId}-${Date.now()}`, {
+    type: "basic",
+    iconUrl: "icons/icon128.png",
+    title: "Availo stopped watching — you were signed out",
+    message: `DVSA signed you out${centre ? ` (${centre})` : ""}. Sign back in to keep watching — your details are already filled in.`,
+    priority: 2,
+    requireInteraction: true,
+  });
+  chrome.action.setBadgeText({ tabId, text: "!" });
+  chrome.action.setBadgeBackgroundColor({ tabId, color: "#c24e3a" });
 }
 
 chrome.notifications.onButtonClicked.addListener(async (notificationId, buttonIndex) => {

@@ -55,11 +55,24 @@
     <p>Please try again later. (Simulated block/CAPTCHA — Fast-Path stops here and hands back to you.)</p>
   </div>
 
+  <!-- ?loggedout=1 renders a GOV.UK "signed out" page; the extension detects the
+       wording, alerts you (once), and resumes when you sign back in. -->
+  <div id="loggedout" style="display:none;">
+    <h1>You have been signed out</h1>
+    <p>For your security, we've signed you out because you were inactive. Your session has expired.</p>
+    <p><a href="login.html">Sign in to continue</a></p>
+  </div>
+
   <script>
     function showConfirm() { document.getElementById("confirm").style.display = "block"; }
-    if (new URLSearchParams(location.search).get("blocked") === "1") {
+    const params = new URLSearchParams(location.search);
+    if (params.get("blocked") === "1") {
       document.getElementById("results").style.display = "none";
       document.getElementById("blocked").style.display = "block";
+    }
+    if (params.get("loggedout") === "1") {
+      document.getElementById("results").style.display = "none";
+      document.getElementById("loggedout").style.display = "block";
     }
   </script>
 </body>
