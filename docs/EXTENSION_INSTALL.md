@@ -61,7 +61,35 @@ tells you to continue manually — it never tries to get around DVSA's checks.
 
 ---
 
-## 4. Practice first (recommended)
+## 4. Leave it running — catch a slot while you're away
+
+You don't have to sit and watch. Set it going and get on with your day:
+
+1. On the DVSA available-tests page, click **Start watching this tab**.
+2. **Leave the computer on** (not asleep/shut down) with that tab open. A locked
+   screen is fine as long as the PC stays awake; if it sleeps or powers off,
+   watching stops.
+3. Availo keeps checking in the background and, while watching, **gently
+   refreshes the DVSA page** so new cancellations show up. When one appears it
+   **highlights the slot** and alerts you — on screen, by email, and (if you set
+   it up) on your **phone**.
+4. When the alert reaches you: get to the slot fast and **click Book yourself** —
+   either come back to the PC, **remote-desktop** into it (the slot is already
+   highlighted, so it's one click), or open DVSA **on your phone** and grab it.
+
+**Availo never books or holds the slot for you.** You always make the booking —
+that's what keeps your account safe.
+
+### The auto-refresh setting (please read)
+On the extension settings page you can turn **Auto-refresh** on/off and set how
+often. Keep it **slow (90+ seconds)** — refreshing too fast looks like a bot to
+DVSA and can get **your account flagged and your test cancelled**. Availo also
+**stops instantly** if DVSA ever shows a challenge or error page, and never tries
+to get around it.
+
+---
+
+## 5. Practice first (recommended)
 
 Before a real slot is on the line, rehearse the whole thing safely:
 
@@ -74,7 +102,7 @@ Before a real slot is on the line, rehearse the whole thing safely:
 
 ---
 
-## 5. If it doesn't recognise a real DVSA page
+## 6. If it doesn't recognise a real DVSA page
 
 The extension auto-detects DVSA's standard GOV.UK page layout, so it should work
 without any setup. If **Check this page** can't read a real page:

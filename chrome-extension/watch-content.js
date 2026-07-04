@@ -78,6 +78,10 @@
     });
 
     showBanner(rowInfo.centre, rowInfo.datetime, { count });
+    // Auto-highlight the moment we detect it, so someone who remotes in / comes
+    // back sees it already ringed and is one click from Select. (Highlight only —
+    // the extension still never clicks it.)
+    highlight(activeSelectElement);
   }
 
   function showBanner(centre, datetime, { count = 1 } = {}) {
@@ -191,6 +195,10 @@
   }
 
   function startWatching(newPrefs) {
+    // Guard against double-init (initial WATCH_START vs a resume after reload).
+    if (observer) observer.disconnect();
+    if (rescanTimer) clearInterval(rescanTimer);
+
     watching = true;
     prefs = newPrefs;
     lastDetectionKey = null;
@@ -201,6 +209,20 @@
     observer.observe(document.body, { childList: true, subtree: true });
     rescanTimer = setInterval(scanForSlots, RESCAN_INTERVAL_MS);
     scanForSlots();
+  }
+
+  // After the page reloads (auto-refresh or a manual reload) the content script
+  // restarts fresh — ask the background whether this tab is still being watched
+  // and, if so, resume so watching survives refreshes without user action.
+  function resumeIfWatched() {
+    try {
+      chrome.runtime.sendMessage({ type: "WATCH_RESUME_QUERY" }, (res) => {
+        if (chrome.runtime.lastError) return;
+        if (res && res.watching) {
+          startWatching({ centre: res.centre, targetDate: res.targetDate });
+        }
+      });
+    } catch { /* background asleep; it will re-arm on next alarm tick */ }
   }
 
   function stopWatchingLocally() {
@@ -220,10 +242,27 @@
       stopWatchingLocally();
     } else if (message.type === "REVEAL_SLOT") {
       revealSlot();
+    } else if (message.type === "RESCAN") {
+      // Background alarm nudges us to re-check (survives background-tab throttling).
+      scanForSlots();
+    } else if (message.type === "REFRESH_PAGE") {
+      // Gentle auto-refresh so new cancellations surface. Never refresh into a
+      // block — if DVSA is challenging us, stop instead of hammering it. And only
+      // ever reload an actual DVSA page, never wherever the user has browsed to.
+      if (!watching) return;
+      if (AvailoResolve.blocked(document)) {
+        reportBlocked("challenge_or_block_before_refresh");
+        stopWatchingLocally();
+        return;
+      }
+      if (!AvailoResolve.page(document)) return;
+      window.location.reload();
     } else if (message.type === "DIAGNOSE") {
       // The popup's "Check this page" self-test — report what we can read.
       sendResponse(AvailoResolve.diagnose(document));
       return true;
     }
   });
+
+  resumeIfWatched();
 })();

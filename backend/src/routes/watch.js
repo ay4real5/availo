@@ -275,9 +275,9 @@ async function sendBackupAlertIfDue(user, testCentre, slot) {
   }
 
   const pushResult = await sendPushToUser(user.id, {
-    title: `Earlier test at ${testCentre}`,
-    body: `A slot on ${new Date(slot.slot_datetime).toLocaleString("en-GB")} just appeared. Open Availo to grab it.`,
-    url: "/",
+    title: `Earlier driving test at ${testCentre}!`,
+    body: `${new Date(slot.slot_datetime).toLocaleString("en-GB")} just appeared. Open DVSA now and book it — it may go fast.`,
+    url: "https://www.gov.uk/change-driving-test",
   });
 
   await logAudit("watch_backup_alert_sent", {

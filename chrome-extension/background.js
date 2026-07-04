@@ -1,3 +1,5 @@
+importScripts("refresh-schedule.js"); // provides nextRefreshDelay()
+
 const DEFAULT_BACKEND_URL = "http://localhost:4000";
 
 // -- legacy passive telemetry path (unchanged) --------------------------------
@@ -21,10 +23,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 // -- Watch & Assist -----------------------------------------------------------
-// watchedTabs: tabId -> { sessionId, centre, targetDate }
-// detections: tabId -> { slotId, test_centre, slot_datetime } (latest live banner)
-const watchedTabs = new Map();
-const detections = new Map();
+// Watch state is kept in chrome.storage.session (keyed ws_<tabId>) so "leave it
+// running" survives MV3 service-worker suspension. detections/notificationTabs
+// are transient UI state — fine to keep in memory.
+const detections = new Map(); // tabId -> { slotId, test_centre, slot_datetime }
 const notificationTabs = new Map(); // notificationId -> tabId
 
 async function getStored() {
@@ -37,28 +39,48 @@ async function getBackendUrl() {
 }
 
 // The vault (licence/booking-ref/search) lives only in chrome.storage.local and
-// is never sent to the backend — background just reads it to answer the content
-// script's autofill request.
+// is never sent to the backend.
 async function getVault() {
   const r = await chrome.storage.local.get("availoVault");
   return r.availoVault || null;
 }
 
-// "Fast-Path active for this tab" is kept in chrome.storage.session so it
-// survives the page navigations (login → search → results) and MV3 service-
-// worker suspension. Session storage is in-memory and cleared when the browser
-// closes — right for a transient, sensitive flag.
+// Auto-refresh setting (see options page). Default: on, conservative cadence.
+async function getAutoRefresh() {
+  const r = await chrome.storage.local.get("availoAutoRefresh");
+  const s = r.availoAutoRefresh || {};
+  return { enabled: s.enabled !== false, baseSeconds: Math.max(45, Number(s.baseSeconds) || 90) };
+}
+
+// --- watch state (storage.session-backed) ---
+async function getWatch(tabId) {
+  if (tabId == null) return null;
+  const r = await chrome.storage.session.get(`ws_${tabId}`);
+  return r[`ws_${tabId}`] || null;
+}
+async function setWatch(tabId, data) {
+  await chrome.storage.session.set({ [`ws_${tabId}`]: data });
+}
+async function clearWatch(tabId) {
+  await chrome.storage.session.remove(`ws_${tabId}`);
+}
+async function allWatches() {
+  const all = await chrome.storage.session.get(null);
+  return Object.entries(all)
+    .filter(([k]) => k.startsWith("ws_"))
+    .map(([k, v]) => ({ tabId: Number(k.slice(3)), ...v }));
+}
+
+// --- fast-path active flag (unchanged) ---
 async function setFastpathActive(tabId, active) {
   const key = `fp_${tabId}`;
   if (active) await chrome.storage.session.set({ [key]: true });
   else await chrome.storage.session.remove(key);
 }
-
 async function isFastpathActive(tabId) {
   if (tabId == null) return false;
-  const key = `fp_${tabId}`;
-  const r = await chrome.storage.session.get(key);
-  return Boolean(r[key]);
+  const r = await chrome.storage.session.get(`fp_${tabId}`);
+  return Boolean(r[`fp_${tabId}`]);
 }
 
 async function apiFetch(path, { method = "GET", body } = {}) {
@@ -66,10 +88,7 @@ async function apiFetch(path, { method = "GET", body } = {}) {
   if (!token) throw new Error("not_signed_in");
   const res = await fetch(`${(backendUrl || DEFAULT_BACKEND_URL)}${path}`, {
     method,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
@@ -81,17 +100,25 @@ async function handleWatchMessage(message, sender, sendResponse) {
   try {
     switch (message.type) {
       case "GET_TAB_STATE": {
-        const tabId = message.tabId;
-        const watch = watchedTabs.get(tabId) || null;
+        const watch = await getWatch(message.tabId);
         const { token, email } = await getStored();
+        const autoRefresh = await getAutoRefresh();
         sendResponse({
           ok: true,
           signedIn: Boolean(token),
           email: email || null,
           watching: Boolean(watch),
           watch,
-          detection: detections.get(tabId) || null,
+          detection: detections.get(message.tabId) || null,
+          autoRefresh,
         });
+        break;
+      }
+
+      case "WATCH_RESUME_QUERY": {
+        // A watched tab reloaded and is asking whether to resume.
+        const watch = await getWatch(sender.tab?.id);
+        sendResponse(watch ? { watching: true, centre: watch.centre, targetDate: watch.targetDate } : { watching: false });
         break;
       }
 
@@ -111,24 +138,27 @@ async function handleWatchMessage(message, sender, sendResponse) {
           },
         });
 
-        watchedTabs.set(tabId, { sessionId: session.id, centre: prefs.centre, targetDate: prefs.current_test_date });
+        await setWatch(tabId, {
+          sessionId: session.id,
+          centre: prefs.centre,
+          targetDate: prefs.current_test_date || null,
+          nextRefreshAt: Date.now() + 90000,
+        });
         detections.delete(tabId);
 
         await chrome.tabs.sendMessage(tabId, {
           type: "WATCH_START",
-          sessionId: session.id,
           centre: prefs.centre,
-          targetDate: prefs.current_test_date,
+          targetDate: prefs.current_test_date || null,
         }).catch(() => {});
 
-        ensureHeartbeatAlarm();
+        ensureWatchAlarm();
         sendResponse({ ok: true, session });
         break;
       }
 
       case "STOP_WATCH": {
-        const tabId = message.tabId;
-        await stopWatch(tabId);
+        await stopWatch(message.tabId);
         sendResponse({ ok: true });
         break;
       }
@@ -152,32 +182,22 @@ async function handleWatchMessage(message, sender, sendResponse) {
       }
 
       case "FASTPATH_WHATNOW": {
-        const tabId = sender.tab?.id;
         const vault = await getVault();
-        const active = await isFastpathActive(tabId);
+        const active = await isFastpathActive(sender.tab?.id);
         let prefs = null;
         if (active) {
           try {
             const p = await apiFetch("/api/auth/preferences");
             if (p) prefs = { centre: p.centre, targetDate: p.current_test_date || null };
-          } catch {
-            // not signed in / offline — passive autofill still works without prefs
-          }
+          } catch { /* passive autofill still works without prefs */ }
         }
         sendResponse({ ok: true, active, vault, prefs });
         break;
       }
 
-      case "FASTPATH_DONE": {
-        const tabId = sender.tab?.id;
-        await setFastpathActive(tabId, false);
-        sendResponse({ ok: true });
-        break;
-      }
-
+      case "FASTPATH_DONE":
       case "FASTPATH_BLOCKED": {
-        const tabId = sender.tab?.id;
-        await setFastpathActive(tabId, false);
+        await setFastpathActive(sender.tab?.id, false);
         sendResponse({ ok: true });
         break;
       }
@@ -185,7 +205,7 @@ async function handleWatchMessage(message, sender, sendResponse) {
       // -- messages from watch-content.js (sender.tab is set) --
       case "SLOT_DETECTED": {
         const tabId = sender.tab?.id;
-        const watch = tabId != null ? watchedTabs.get(tabId) : null;
+        const watch = await getWatch(tabId);
         if (!watch) { sendResponse({ ok: false, error: "not_watching" }); break; }
 
         const result = await apiFetch("/api/watch/events", {
@@ -210,47 +230,35 @@ async function handleWatchMessage(message, sender, sendResponse) {
         break;
       }
 
-      case "HOLD_CLICKED": {
-        const tabId = sender.tab?.id;
-        const watch = tabId != null ? watchedTabs.get(tabId) : null;
-        if (!watch) { sendResponse({ ok: false, error: "not_watching" }); break; }
-        const detection = detections.get(tabId);
-        await apiFetch("/api/watch/events", {
-          method: "POST",
-          body: {
-            event_type: "hold_clicked",
-            watch_session_id: watch.sessionId,
-            slot_id: detection?.slotId || null,
-            test_centre: message.test_centre,
-            slot_datetime: message.slot_datetime,
-          },
-        });
-        sendResponse({ ok: true });
-        break;
-      }
-
+      case "HOLD_CLICKED":
       case "HOLD_RESULT": {
         const tabId = sender.tab?.id;
-        const watch = tabId != null ? watchedTabs.get(tabId) : null;
+        const watch = await getWatch(tabId);
         if (!watch) { sendResponse({ ok: false, error: "not_watching" }); break; }
         const detection = detections.get(tabId);
-        await apiFetch("/api/watch/events", {
-          method: "POST",
-          body: {
-            event_type: "hold_result",
-            watch_session_id: watch.sessionId,
-            slot_id: detection?.slotId || null,
-            outcome: message.outcome,
-            message: message.message || null,
-          },
-        });
+        const body = message.type === "HOLD_CLICKED"
+          ? {
+              event_type: "hold_clicked",
+              watch_session_id: watch.sessionId,
+              slot_id: detection?.slotId || null,
+              test_centre: message.test_centre,
+              slot_datetime: message.slot_datetime,
+            }
+          : {
+              event_type: "hold_result",
+              watch_session_id: watch.sessionId,
+              slot_id: detection?.slotId || null,
+              outcome: message.outcome,
+              message: message.message || null,
+            };
+        await apiFetch("/api/watch/events", { method: "POST", body });
         sendResponse({ ok: true });
         break;
       }
 
       case "BLOCKED": {
         const tabId = sender.tab?.id;
-        const watch = tabId != null ? watchedTabs.get(tabId) : null;
+        const watch = await getWatch(tabId);
         if (!watch) { sendResponse({ ok: false, error: "not_watching" }); break; }
         await apiFetch("/api/watch/events", {
           method: "POST",
@@ -261,8 +269,8 @@ async function handleWatchMessage(message, sender, sendResponse) {
             page_url: message.page_url || null,
           },
         });
-        // Detection stopped itself on the content-script side; drop our local state too.
-        watchedTabs.delete(tabId);
+        // Content stopped itself on a block; drop our state so we don't refresh into it.
+        await clearWatch(tabId);
         detections.delete(tabId);
         sendResponse({ ok: true });
         break;
@@ -277,16 +285,14 @@ async function handleWatchMessage(message, sender, sendResponse) {
 }
 
 async function stopWatch(tabId) {
-  const watch = watchedTabs.get(tabId);
-  watchedTabs.delete(tabId);
+  const watch = await getWatch(tabId);
+  await clearWatch(tabId);
   detections.delete(tabId);
   await chrome.tabs.sendMessage(tabId, { type: "WATCH_STOP" }).catch(() => {});
   if (!watch) return;
   try {
     await apiFetch(`/api/watch/sessions/${watch.sessionId}/stop`, { method: "POST" });
-  } catch {
-    // best-effort — a stale session will just show as inactive via the heartbeat check
-  }
+  } catch { /* best-effort — staleness check covers it */ }
 }
 
 function notifyDetection(tabId, centre, slotDatetime) {
@@ -296,11 +302,11 @@ function notifyDetection(tabId, centre, slotDatetime) {
   chrome.notifications.create(notificationId, {
     type: "basic",
     iconUrl: "icons/icon128.png",
-    title: "Availo: earlier slot found!",
-    message: `${centre} — ${when}. Open the tab — we'll highlight it so you can Select it.`,
+    title: "Earlier driving test slot!",
+    message: `${centre} — ${when}. Open DVSA now and click Book — we've highlighted it for you.`,
     priority: 2,
     requireInteraction: true,
-    buttons: [{ title: "Show me the slot" }],
+    buttons: [{ title: "Take me to the slot" }],
   });
   chrome.action.setBadgeText({ tabId, text: "!" });
   chrome.action.setBadgeBackgroundColor({ tabId, color: "#e0932a" });
@@ -320,30 +326,42 @@ chrome.notifications.onClicked.addListener(async (notificationId) => {
   await chrome.tabs.update(tabId, { active: true }).catch(() => {});
 });
 
-// Best-effort cleanup when a watched tab is closed — the MV3 service worker can
-// be killed mid-request, so the heartbeat staleness check (backend + dashboard)
-// is the reliable fallback if this doesn't complete.
 chrome.tabs.onRemoved.addListener((tabId) => {
-  if (watchedTabs.has(tabId)) stopWatch(tabId);
+  stopWatch(tabId);
   setFastpathActive(tabId, false);
 });
 
-// chrome.alarms (not setInterval) survives MV3 service-worker suspension, which
-// is required for heartbeats to keep flowing during a long watch session.
-function ensureHeartbeatAlarm() {
-  chrome.alarms.get("watch-heartbeat", (alarm) => {
-    if (!alarm) chrome.alarms.create("watch-heartbeat", { periodInMinutes: 1 });
+// One alarm drives heartbeat + rescan + gentle auto-refresh. chrome.alarms fires
+// even when the tab is backgrounded and after the SW was suspended — the reliable
+// way to keep "leave it running" alive (a page setInterval gets throttled).
+function ensureWatchAlarm() {
+  chrome.alarms.get("watch-tick", (alarm) => {
+    if (!alarm) chrome.alarms.create("watch-tick", { periodInMinutes: 1 });
   });
 }
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
-  if (alarm.name !== "watch-heartbeat") return;
-  if (watchedTabs.size === 0) return;
-  for (const [tabId, watch] of watchedTabs.entries()) {
+  if (alarm.name !== "watch-tick") return;
+  const watches = await allWatches();
+  if (watches.length === 0) return;
+
+  const { enabled: autoRefreshOn, baseSeconds } = await getAutoRefresh();
+  const now = Date.now();
+
+  for (const watch of watches) {
+    // Keep the backend session fresh.
     try {
       await apiFetch(`/api/watch/sessions/${watch.sessionId}/heartbeat`, { method: "POST" });
-    } catch {
-      // a single failed heartbeat isn't fatal — the next alarm tick retries
+    } catch { /* next tick retries */ }
+
+    // Gentle auto-refresh so new cancellations surface — slow, jittered, and the
+    // content script refuses to refresh into a block. Otherwise just re-scan.
+    if (autoRefreshOn && watch.nextRefreshAt && now >= watch.nextRefreshAt) {
+      await chrome.tabs.sendMessage(watch.tabId, { type: "REFRESH_PAGE" }).catch(() => {});
+      const delay = nextRefreshDelay(baseSeconds * 1000, 30000);
+      await setWatch(watch.tabId, { ...watch, nextRefreshAt: now + delay });
+    } else {
+      await chrome.tabs.sendMessage(watch.tabId, { type: "RESCAN" }).catch(() => {});
     }
   }
 });

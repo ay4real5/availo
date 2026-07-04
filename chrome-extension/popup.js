@@ -161,7 +161,9 @@ async function render() {
   const detail = state.detection
     ? `<div class="status watching"><strong>Slot found:</strong> ${state.detection.test_centre} — ${new Date(state.detection.slot_datetime).toLocaleString()}</div>`
     : "";
-  wrap.innerHTML = `<p class="status watching">Watching for: ${state.watch.centre}</p>${detail}`;
+  const ar = state.autoRefresh;
+  const arText = ar && ar.enabled ? ` · auto-refreshing ~${ar.baseSeconds}s` : " · auto-refresh off";
+  wrap.innerHTML = `<p class="status watching">Watching for: ${state.watch.centre}${arText}</p>${detail}`;
 
   if (state.detection) {
     const revealBtn = document.createElement("button");

@@ -17,7 +17,7 @@
     .card { border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin-top: 16px; }
     .privacy { background: #e4f0ec; border-radius: 8px; padding: 10px 12px; font-size: 12px; color: var(--primary-dark); margin-top: 8px; }
     #status, #vaultStatus { margin-top: 12px; font-size: 13px; }
-    #signedIn, #vaultSection { display: none; }
+    #signedIn, #vaultSection, #refreshSection { display: none; }
     a.signout { font-size: 12px; color: var(--danger); cursor: pointer; }
     .row { display: flex; gap: 10px; }
     .row > div { flex: 1; }
@@ -71,6 +71,22 @@
       <button id="saveVault">Save details</button>
       <button id="clearVault" class="link" style="margin-left:14px;">Clear saved details</button>
       <div id="vaultStatus"></div>
+    </div>
+  </div>
+
+  <!-- ── Watching while you're away ──────────────────────────── -->
+  <div id="refreshSection">
+    <h2>Watching while you're away</h2>
+    <p class="hint">While a tab is watching, Availo can gently refresh the DVSA page so new cancellations show up — so you can leave it running and get an alert on your phone.</p>
+    <div class="card">
+      <label style="display:flex;align-items:center;gap:8px;font-weight:600;margin-top:0;">
+        <input type="checkbox" id="autoRefreshEnabled" style="width:auto;" /> Auto-refresh the DVSA page while watching
+      </label>
+      <label for="autoRefreshSeconds">Refresh about every (seconds)</label>
+      <input id="autoRefreshSeconds" type="number" min="45" max="600" />
+      <div class="privacy" style="background:#fbeae6;color:#7a2718;">⚠ Refreshing too fast can make DVSA flag your account and cancel your test. Keep this slow (90+ seconds). Availo stops immediately if DVSA ever shows a challenge, and never reserves a slot for you.</div>
+      <button id="saveRefresh">Save</button>
+      <div id="refreshStatus"></div>
     </div>
   </div>
 

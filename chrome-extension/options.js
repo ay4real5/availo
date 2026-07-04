@@ -5,11 +5,15 @@ const DEFAULT_BACKEND_URL = "http://localhost:4000";
 // the DVSA login/search forms for them — password-manager class, nothing more.
 const VAULT_KEY = "availoVault";
 
+const REFRESH_KEY = "availoAutoRefresh";
+
 const signedOutEl = document.getElementById("signedOut");
 const signedInEl = document.getElementById("signedIn");
 const vaultSectionEl = document.getElementById("vaultSection");
+const refreshSectionEl = document.getElementById("refreshSection");
 const statusEl = document.getElementById("status");
 const vaultStatusEl = document.getElementById("vaultStatus");
+const refreshStatusEl = document.getElementById("refreshStatus");
 
 async function getStored() {
   return chrome.storage.local.get(["backendUrl", "token", "userId", "email", VAULT_KEY]);
@@ -23,14 +27,24 @@ async function renderState() {
     signedOutEl.style.display = "none";
     signedInEl.style.display = "block";
     vaultSectionEl.style.display = "block";
+    refreshSectionEl.style.display = "block";
     document.getElementById("signedInEmail").textContent = stored.email || "";
     renderVault(stored[VAULT_KEY]);
+    await renderRefresh();
     await renderPrefsSummary(stored);
   } else {
     signedOutEl.style.display = "block";
     signedInEl.style.display = "none";
     vaultSectionEl.style.display = "none";
+    refreshSectionEl.style.display = "none";
   }
+}
+
+async function renderRefresh() {
+  const { [REFRESH_KEY]: s } = await chrome.storage.local.get(REFRESH_KEY);
+  const cfg = s || {};
+  document.getElementById("autoRefreshEnabled").checked = cfg.enabled !== false; // default on
+  document.getElementById("autoRefreshSeconds").value = Math.max(45, Number(cfg.baseSeconds) || 90);
 }
 
 function renderVault(vault) {
@@ -115,6 +129,15 @@ document.getElementById("clearVault").addEventListener("click", async () => {
   renderVault(null);
   vaultStatusEl.textContent = "Cleared.";
   setTimeout(() => { vaultStatusEl.textContent = ""; }, 3000);
+});
+
+document.getElementById("saveRefresh").addEventListener("click", async () => {
+  const enabled = document.getElementById("autoRefreshEnabled").checked;
+  const baseSeconds = Math.max(45, Math.min(600, Number(document.getElementById("autoRefreshSeconds").value) || 90));
+  await chrome.storage.local.set({ [REFRESH_KEY]: { enabled, baseSeconds } });
+  document.getElementById("autoRefreshSeconds").value = baseSeconds;
+  refreshStatusEl.textContent = enabled ? `Saved — refreshing about every ${baseSeconds}s while watching.` : "Saved — auto-refresh off.";
+  setTimeout(() => { refreshStatusEl.textContent = ""; }, 3000);
 });
 
 renderState();
