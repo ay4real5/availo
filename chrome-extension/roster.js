@@ -35,7 +35,7 @@ function rosterNewId() {
 }
 
 function emptyPerson() {
-  return { id: rosterNewId(), name: "", licence: "", bookingRef: "", centres: [], dateFrom: "", dateTo: "" };
+  return { id: rosterNewId(), name: "", licence: "", bookingRef: "", centres: [], currentTestDate: "", dateFrom: "", dateTo: "" };
 }
 
 // Normalise one person record into the canonical shape.
@@ -49,6 +49,9 @@ function normalisePerson(p) {
     licence: (p.licence || "").trim().toUpperCase(),
     bookingRef: (p.bookingRef || "").trim(),
     centres,
+    // The person's CURRENT booked test date. We only alert on slots earlier
+    // than this. Empty = alert on any slot at their centre(s).
+    currentTestDate: p.currentTestDate || "",
     dateFrom: p.dateFrom || "",
     dateTo: p.dateTo || "",
   };

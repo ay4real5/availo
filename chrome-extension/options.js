@@ -70,6 +70,7 @@ function syncRosterFromDom() {
       licence: card.querySelector(".p-licence").value.trim().toUpperCase(),
       bookingRef: card.querySelector(".p-bookingref").value.trim(),
       centres,
+      currentTestDate: card.querySelector(".p-currentdate").value,
       dateFrom: card.querySelector(".p-datefrom").value,
       dateTo: card.querySelector(".p-dateto").value,
     };
@@ -103,6 +104,8 @@ function personCardHtml(person, i) {
       <label>Test centres to watch (up to ${AvailoRoster.MAX_CENTRES})</label>
       <div class="centres-list">${centreRows}</div>
       ${canAddCentre ? `<button type="button" class="add-centre">+ Add another centre</button>` : ""}
+      <label>Their current test date (only alert on earlier slots)</label>
+      <input class="p-currentdate" type="date" value="${escapeAttr(person.currentTestDate)}" />
       <div class="row">
         <div>
           <label>Search from</label>

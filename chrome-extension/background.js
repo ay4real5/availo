@@ -115,8 +115,10 @@ async function beginPersonWatch(rotation) {
   await AvailoRoster.setActiveId(person.id);
   const pacing = await AvailoRoster.getPacing();
 
-  // Fresh backend session for this person's primary centre.
+  // Fresh backend session for this person's primary centre. We alert only on
+  // slots EARLIER than their current test date (targetDate); empty = any slot.
   const centre = (person.centres && person.centres[0]) || "unknown";
+  const targetDate = person.currentTestDate || null;
   let session = null;
   try {
     const tab = await chrome.tabs.get(rotation.tabId);
@@ -125,7 +127,7 @@ async function beginPersonWatch(rotation) {
       body: {
         centre,
         person_name: person.name || null,
-        target_date: person.dateFrom || null,
+        target_date: targetDate,
         tab_url: tab.url || null,
         extension_version: chrome.runtime.getManifest().version,
       },
@@ -138,7 +140,7 @@ async function beginPersonWatch(rotation) {
     personName: person.name || null,
     centre,
     centres: person.centres || [],
-    targetDate: person.dateFrom || null,
+    targetDate,
     nextRefreshAt: Date.now() + 90000,
   });
   detections.delete(rotation.tabId);
@@ -149,7 +151,7 @@ async function beginPersonWatch(rotation) {
     type: "WATCH_START",
     centre,
     centres: person.centres || [],
-    targetDate: person.dateFrom || null,
+    targetDate,
   }).catch(() => {});
   await setFastpathActive(rotation.tabId, false); // passive fill only, user signs in
 
