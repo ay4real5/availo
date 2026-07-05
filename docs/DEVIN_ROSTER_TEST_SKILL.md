@@ -83,8 +83,7 @@ Performs a complete screen-recorded end-to-end test of the Availo Fast-Path Chro
     - Verify: signed-out notification, watch stops
 
 14. **Test queue page**
-    - Create `queue.html` with Queue-it/DVSA waiting-room wording
-    - Navigate to it while watching
+    - Navigate to `http://localhost:5555/queue.html` while watching
     - Verify: queue detected, rotation PAUSES (not stops), badge "Q", notification fires
     - Navigate back to results.html → verify watching resumes
 
