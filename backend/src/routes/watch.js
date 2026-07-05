@@ -18,6 +18,10 @@ const STALE_AFTER_MS = 2 * 60 * 1000;
 
 const startSchema = z.object({
   centre: z.string().min(1),
+  // Optional label so the owner can tell whose session this is when watching
+  // for a few people from one laptop. It's just a display name (e.g. "Sarah") —
+  // never a licence number or booking reference, which stay on the device.
+  person_name: z.string().max(80).optional().nullable(),
   target_date: z.string().datetime().optional().nullable(),
   tab_url: z.string().optional().nullable(),
   extension_version: z.string().optional().nullable(),
@@ -38,6 +42,7 @@ watchRouter.post("/sessions", requireAuth, async (req, res, next) => {
         user_id: req.userId,
         status: "active",
         test_centre: body.centre,
+        person_name: body.person_name || null,
         target_date: body.target_date || null,
         tab_url: body.tab_url || null,
         extension_version: body.extension_version || null,
@@ -50,7 +55,7 @@ watchRouter.post("/sessions", requireAuth, async (req, res, next) => {
       entityId: session.id,
       entityType: "watch_session",
       actor: "user",
-      payload: { user_id: req.userId, centre: body.centre },
+      payload: { user_id: req.userId, centre: body.centre, person_name: body.person_name || null },
     });
 
     res.status(201).json(session);
@@ -236,6 +241,11 @@ const eventSchema = z.discriminatedUnion("event_type", [
     page_url: z.string().optional().nullable(),
   }),
   z.object({
+    event_type: z.literal("queued"),
+    watch_session_id: z.string().uuid(),
+    page_url: z.string().optional().nullable(),
+  }),
+  z.object({
     event_type: z.literal("signed_out"),
     watch_session_id: z.string().uuid(),
   }),
@@ -403,6 +413,18 @@ watchRouter.post("/events", requireAuth, eventsLimiter, async (req, res, next) =
           console.error("[watch] signed-out alert flow error:", alertErr.message);
         }
       }
+      return res.status(201).json({ ok: true });
+    }
+
+    if (event.event_type === "queued") {
+      // A queue/waiting room — informational only. No alert (the on-device
+      // banner covers it) and no dedupe needed; just record it.
+      await logAudit("extension_queued", {
+        entityId: req.userId,
+        entityType: "user",
+        actor: "user",
+        payload: { page_url: event.page_url || null },
+      });
       return res.status(201).json({ ok: true });
     }
 

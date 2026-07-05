@@ -16,11 +16,22 @@
     button.link { background: none; color: var(--danger); padding: 0; margin-top: 0; font-weight: 600; }
     .card { border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin-top: 16px; }
     .privacy { background: #e4f0ec; border-radius: 8px; padding: 10px 12px; font-size: 12px; color: var(--primary-dark); margin-top: 8px; }
-    #status, #vaultStatus { margin-top: 12px; font-size: 13px; }
-    #signedIn, #vaultSection, #refreshSection { display: none; }
+    #status, #vaultStatus, #rosterStatus, #pacingStatus { margin-top: 12px; font-size: 13px; }
+    #signedIn, #rosterSection, #pacingSection, #refreshSection { display: none; }
     a.signout { font-size: 12px; color: var(--danger); cursor: pointer; }
     .row { display: flex; gap: 10px; }
     .row > div { flex: 1; }
+    .person-card { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-top: 14px; position: relative; }
+    .person-head { display: flex; justify-content: space-between; align-items: center; }
+    .person-title { font-weight: 700; font-size: 14px; color: var(--primary-dark); }
+    .remove-person { background: none; color: var(--danger); border: none; font-size: 12px; font-weight: 600; cursor: pointer; padding: 0; margin: 0; }
+    .centres-list { margin-top: 4px; }
+    .centre-row { display: flex; gap: 6px; align-items: center; margin-top: 6px; }
+    .centre-row input { margin-top: 0; }
+    .centre-row button { margin-top: 0; padding: 6px 10px; background: #f3f2f1; color: var(--danger); font-size: 12px; }
+    .add-centre { background: none; color: var(--primary-dark); text-decoration: underline; padding: 0; margin-top: 8px; font-weight: 600; font-size: 12px; }
+    .add-person { background: var(--primary); }
+    .cap-note { font-size: 12px; color: var(--muted); margin-top: 8px; }
   </style>
 </head>
 <body>
@@ -45,32 +56,39 @@
     <p><a class="signout" id="signOut">Sign out</a></p>
   </div>
 
-  <!-- ── Local vault (never leaves this browser) ─────────────── -->
-  <div id="vaultSection">
-    <h2>Your booking details</h2>
-    <p class="hint">Fast-Path uses these to fill the DVSA login and search forms instantly, so you're not typing during the race.</p>
-    <div class="privacy">🔒 Stored only in this browser, on this device. These are never sent to Availo's servers.</div>
+  <!-- ── Roster: the people you watch for (never leaves this browser) ── -->
+  <div id="rosterSection">
+    <h2>People you're watching for</h2>
+    <p class="hint">Add up to 3 people on this one laptop. Availo watches for one at a time and tells you when to switch — so DVSA only ever sees one person signed in from your home internet, like a family sharing a computer.</p>
+    <div class="privacy">🔒 Every detail here is stored only in this browser, on this device. Licence numbers and booking references are never sent to Availo's servers.</div>
 
+    <div id="rosterList"></div>
+
+    <button id="addPerson" class="add-person">+ Add a person</button>
+    <p class="cap-note" id="capNote"></p>
+    <div id="rosterStatus"></div>
+  </div>
+
+  <!-- ── Pacing: how slowly to cycle (keeps it human) ─────────── -->
+  <div id="pacingSection">
+    <h2>How Availo paces itself</h2>
+    <p class="hint">Slow, human pacing is what keeps your accounts safe on one home connection. These have safe minimums you can't go below.</p>
     <div class="card">
-      <label>Driving licence number</label>
-      <input id="vaultLicence" type="text" autocomplete="off" />
-      <label>Booking reference</label>
-      <input id="vaultBookingRef" type="text" autocomplete="off" />
-      <label>Preferred test centre (for the search form)</label>
-      <input id="vaultCentre" type="text" autocomplete="off" />
       <div class="row">
         <div>
-          <label>Search from</label>
-          <input id="vaultDateFrom" type="date" />
+          <label for="watchMinutes">Watch each person for (minutes)</label>
+          <input id="watchMinutes" type="number" min="5" max="60" />
         </div>
         <div>
-          <label>Search to</label>
-          <input id="vaultDateTo" type="date" />
+          <label for="cooldownSeconds">Gap between people (seconds)</label>
+          <input id="cooldownSeconds" type="number" min="30" max="600" />
         </div>
       </div>
-      <button id="saveVault">Save details</button>
-      <button id="clearVault" class="link" style="margin-left:14px;">Clear saved details</button>
-      <div id="vaultStatus"></div>
+      <label for="breakMinutes">Break after everyone's had a turn (minutes)</label>
+      <input id="breakMinutes" type="number" min="15" max="180" />
+      <div class="privacy" style="background:#fbeae6;color:#7a2718;">⚠ Keep these relaxed. Watching ~15 min each with a long break looks like a person helping their family. Rushing makes DVSA suspicious.</div>
+      <button id="savePacing">Save pacing</button>
+      <div id="pacingStatus"></div>
     </div>
   </div>
 
@@ -90,6 +108,7 @@
     </div>
   </div>
 
+  <script src="roster.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

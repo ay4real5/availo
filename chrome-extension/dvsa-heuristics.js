@@ -79,6 +79,26 @@ function looksLikeBlock(text) {
   );
 }
 
+// Does this page read like a DVSA/Queue-it waiting room? A queue is NOT a block:
+// the correct behaviour is to WAIT quietly (never refresh — that loses your
+// place), not to stop watching. Kept separate from looksLikeBlock for that
+// reason.
+function looksLikeQueue(text) {
+  if (!text || typeof text !== "string") return false;
+  const t = text.toLowerCase();
+  return (
+    /you\s+are\s+now\s+in\s+line/.test(t) ||
+    /you\s+are\s+in\s+(?:a\s+)?queue/.test(t) ||
+    /waiting\s+room/.test(t) ||
+    /your\s+(?:estimated\s+)?wait\s+time/.test(t) ||
+    /estimated\s+wait/.test(t) ||
+    /your\s+turn/.test(t) ||
+    /please\s+wait.*(?:queue|line|turn)/.test(t) ||
+    /\bqueue-it\b/.test(t) ||
+    /number\s+of\s+users\s+(?:in\s+line\s+)?ahead\s+of\s+you/.test(t)
+  );
+}
+
 // Does this page text read like DVSA signed the user out / the session expired?
 function looksLoggedOut(text) {
   if (!text || typeof text !== "string") return false;
@@ -126,5 +146,5 @@ function buttonMatchesAction(text, action) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { parseSlotDateTime, looksLikeBlock, looksLoggedOut, labelMatchesKind, buttonMatchesAction };
+  module.exports = { parseSlotDateTime, looksLikeBlock, looksLikeQueue, looksLoggedOut, labelMatchesKind, buttonMatchesAction };
 }

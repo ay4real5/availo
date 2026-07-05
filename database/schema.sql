@@ -91,6 +91,10 @@ CREATE TABLE IF NOT EXISTS watch_sessions (
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   status TEXT DEFAULT 'active',        -- active | ended
   test_centre TEXT,
+  -- Optional display label (e.g. "Sarah") when the owner watches for a few
+  -- people from one laptop. Never a licence number / booking reference — those
+  -- stay on the device in the extension.
+  person_name TEXT,
   target_date TIMESTAMPTZ,
   tab_url TEXT,
   extension_version TEXT,
@@ -99,6 +103,8 @@ CREATE TABLE IF NOT EXISTS watch_sessions (
   ended_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+-- Safe on existing databases created before roster mode.
+ALTER TABLE watch_sessions ADD COLUMN IF NOT EXISTS person_name TEXT;
 
 -- ── scraper_jobs ─────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS scraper_jobs (

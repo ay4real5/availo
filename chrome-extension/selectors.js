@@ -23,6 +23,7 @@ const AvailoResolve = (() => {
     : {
         parseSlotDateTime: (t) => (typeof parseSlotDateTime === "function" ? parseSlotDateTime(t) : null),
         looksLikeBlock: (t) => (typeof looksLikeBlock === "function" ? looksLikeBlock(t) : false),
+        looksLikeQueue: (t) => (typeof looksLikeQueue === "function" ? looksLikeQueue(t) : false),
         looksLoggedOut: (t) => (typeof looksLoggedOut === "function" ? looksLoggedOut(t) : false),
         labelMatchesKind: (t, k) => (typeof labelMatchesKind === "function" ? labelMatchesKind(t, k) : false),
         buttonMatchesAction: (t, a) => (typeof buttonMatchesAction === "function" ? buttonMatchesAction(t, a) : false),
@@ -77,6 +78,14 @@ const AvailoResolve = (() => {
   function blocked(doc = document) {
     if (testid(doc, "availo-blocked")) return true;
     return H.looksLikeBlock(bodyText(doc));
+  }
+
+  // A queue/waiting room. Distinct from blocked(): the caller should WAIT
+  // (keep the tab as-is, never refresh — refreshing loses your place in line),
+  // not stop watching.
+  function queued(doc = document) {
+    if (testid(doc, "availo-queue")) return true;
+    return H.looksLikeQueue(bodyText(doc));
   }
 
   // Has DVSA signed the user out? True on the sign-in page or a session-expired
@@ -151,6 +160,7 @@ const AvailoResolve = (() => {
     return {
       page: p,
       blocked: blocked(doc),
+      queued: queued(doc),
       loggedOut: loggedOut(doc),
       login: { licence: !!login.licence, bookingRef: !!login.bookingRef, submit: !!login.submit },
       search: { centre: !!search.centre, dateFrom: !!search.dateFrom, submit: !!search.submit },
@@ -158,7 +168,7 @@ const AvailoResolve = (() => {
     };
   }
 
-  return { page, loginFields, searchFields, resultRows, blocked, loggedOut, diagnose };
+  return { page, loginFields, searchFields, resultRows, blocked, queued, loggedOut, diagnose };
 })();
 
 if (typeof module !== "undefined" && module.exports) {

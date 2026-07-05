@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert");
 const {
-  parseSlotDateTime, looksLikeBlock, looksLoggedOut, labelMatchesKind, buttonMatchesAction,
+  parseSlotDateTime, looksLikeBlock, looksLikeQueue, looksLoggedOut, labelMatchesKind, buttonMatchesAction,
 } = require("../dvsa-heuristics.js");
 
 test("parseSlotDateTime: full GOV.UK wording with am time", () => {
@@ -46,6 +46,21 @@ test("looksLikeBlock: recognises common block/challenge wording", () => {
 test("looksLikeBlock: normal results page is not a block", () => {
   assert.equal(looksLikeBlock("Available tests at Bolton — Monday 10 November 2026"), false);
   assert.equal(looksLikeBlock(""), false);
+});
+
+test("looksLikeQueue: recognises DVSA / Queue-it waiting-room wording", () => {
+  assert.equal(looksLikeQueue("You are now in line"), true);
+  assert.equal(looksLikeQueue("You are in a queue"), true);
+  assert.equal(looksLikeQueue("Your estimated wait time is 5 minutes"), true);
+  assert.equal(looksLikeQueue("Waiting room — please do not refresh"), true);
+  assert.equal(looksLikeQueue("Number of users in line ahead of you: 1,204"), true);
+});
+
+test("looksLikeQueue: a normal results page or a block is not a queue", () => {
+  assert.equal(looksLikeQueue("Available tests at Bolton — Monday 10 November 2026"), false);
+  assert.equal(looksLikeQueue("Too many requests — please try later"), false);
+  assert.equal(looksLikeQueue(""), false);
+  assert.equal(looksLikeQueue(null), false);
 });
 
 test("looksLoggedOut: recognises DVSA sign-out / session-expiry wording", () => {

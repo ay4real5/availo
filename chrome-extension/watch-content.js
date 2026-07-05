@@ -22,6 +22,7 @@
   let activeSelectElement = null;
   let activeSlotInfo = null; // { datetime, centre }
   let loggedOutReported = false;
+  let queuedReported = false;
 
   ensureHighlightStyle();
 
@@ -60,6 +61,19 @@
       stopWatchingLocally();
       return;
     }
+
+    // In a DVSA queue / waiting room? This is NOT a block — hold position and
+    // wait. Never refresh (that loses your place). Alert once; keep watching so
+    // we pick straight back up when we're through the queue.
+    if (AvailoResolve.queued(document)) {
+      if (!queuedReported) {
+        queuedReported = true;
+        chrome.runtime.sendMessage({ type: "QUEUED", page_url: window.location.href });
+        infoBanner("<strong>You're in the DVSA queue.</strong><br>Stay on this page and wait — <strong>don't refresh</strong>, or you'll lose your place. Availo is paused until you're through.");
+      }
+      return;
+    }
+    queuedReported = false; // through the queue — re-arm
 
     // Signed out? Don't silently watch a login page — alert the user (once) and
     // wait. Watching stays active so it resumes automatically once they sign in.
@@ -218,6 +232,7 @@
     activeSelectElement = null;
     activeSlotInfo = null;
     loggedOutReported = false;
+    queuedReported = false;
 
     observer = new MutationObserver(() => scanForSlots());
     observer.observe(document.body, { childList: true, subtree: true });
@@ -269,6 +284,8 @@
         stopWatchingLocally();
         return;
       }
+      // Never refresh while queuing — a reload sends you to the back of the line.
+      if (AvailoResolve.queued(document)) return;
       if (AvailoResolve.page(document) !== "results") return;
       window.location.reload();
     } else if (message.type === "DIAGNOSE") {
