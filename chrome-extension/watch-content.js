@@ -95,8 +95,8 @@
     // Only ever alert on the SOONEST matching slot, and only once. We re-alert
     // when the soonest changes — it got taken and a later one is now first, or a
     // new even-earlier slot appeared — never repeatedly for slots already seen.
-    const soonest = ranked[0];
-    if (soonest && !alertedKeys.has(`${soonest.centre}|${soonest.datetime}`)) {
+    const soonest = availoPickSoonestUnalerted(ranked, alertedKeys);
+    if (soonest) {
       offerSlot(soonest, { count: ranked.length });
     }
   }

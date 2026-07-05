@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert");
-const { availoMatchesTarget } = require("../watch-match.js");
+const { availoMatchesTarget, availoPickSoonestUnalerted } = require("../watch-match.js");
 
 test("matches when centre and date both qualify", () => {
   const ok = availoMatchesTarget(
@@ -53,4 +53,42 @@ test("rejects malformed dates", () => {
 test("rejects missing slot or prefs", () => {
   assert.equal(availoMatchesTarget(null, { centre: "Bolton" }), false);
   assert.equal(availoMatchesTarget({ centre: "Bolton", datetime: "2026-01-01T00:00:00.000Z" }, null), false);
+});
+
+test("pickSoonestUnalerted: returns the earliest slot when nothing has been alerted", () => {
+  const slots = [
+    { centre: "Bolton", datetime: "2026-11-10T09:15:00.000Z" },
+    { centre: "Bolton", datetime: "2026-11-24T13:00:00.000Z" },
+  ];
+  const next = availoPickSoonestUnalerted(slots, new Set());
+  assert.deepStrictEqual(next, slots[0]);
+});
+
+test("pickSoonestUnalerted: returns the next slot when the earliest has already been alerted", () => {
+  const slots = [
+    { centre: "Bolton", datetime: "2026-11-10T09:15:00.000Z" },
+    { centre: "Bolton", datetime: "2026-11-24T13:00:00.000Z" },
+  ];
+  const next = availoPickSoonestUnalerted(slots, new Set(["Bolton|2026-11-10T09:15:00.000Z"]));
+  assert.deepStrictEqual(next, slots[1]);
+});
+
+test("pickSoonestUnalerted: returns null when every slot has already been alerted", () => {
+  const slots = [
+    { centre: "Bolton", datetime: "2026-11-10T09:15:00.000Z" },
+    { centre: "Bolton", datetime: "2026-11-24T13:00:00.000Z" },
+  ];
+  const alerted = new Set(["Bolton|2026-11-10T09:15:00.000Z", "Bolton|2026-11-24T13:00:00.000Z"]);
+  const next = availoPickSoonestUnalerted(slots, alerted);
+  assert.equal(next, null);
+});
+
+test("pickSoonestUnalerted: re-alerts when an even-earlier slot appears that wasn't alerted", () => {
+  const slots = [
+    { centre: "Bolton", datetime: "2026-11-08T08:00:00.000Z" },
+    { centre: "Bolton", datetime: "2026-11-10T09:15:00.000Z" },
+  ];
+  const alerted = new Set(["Bolton|2026-11-10T09:15:00.000Z"]);
+  const next = availoPickSoonestUnalerted(slots, alerted);
+  assert.deepStrictEqual(next, slots[0]);
 });

@@ -13,6 +13,18 @@ function availoMatchesTarget(slot, prefs) {
   return slotTime < targetTime;
 }
 
+// Alert-once logic extracted from watch-content.js so we can test it.
+// Given ranked slots (earliest first) and a Set of already-alerted keys
+// ("centre|datetime"), returns the soonest slot we should alert on, or null.
+// We re-alert when the soonest slot changes — either it got taken and the next
+// one is now first, or a new even-earlier slot appeared — but never repeatedly
+// for the same key.
+function availoPickSoonestUnalerted(rankedSlots, alertedKeys) {
+  if (!Array.isArray(rankedSlots) || rankedSlots.length === 0) return null;
+  const set = alertedKeys instanceof Set ? alertedKeys : new Set(alertedKeys);
+  return rankedSlots.find((s) => !set.has(`${s.centre}|${s.datetime}`)) || null;
+}
+
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { availoMatchesTarget };
+  module.exports = { availoMatchesTarget, availoPickSoonestUnalerted };
 }
