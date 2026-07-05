@@ -229,6 +229,7 @@ async function render() {
     skipBtn.addEventListener("click", async () => {
       appEl.innerHTML = "<p>Switching…</p>";
       await sendToBackground({ type: "SKIP_PERSON", tabId: tab.id });
+      await new Promise((r) => setTimeout(r, 1500)); // keep "Switching…" visible briefly
       render();
     });
     wrap.appendChild(skipBtn);
