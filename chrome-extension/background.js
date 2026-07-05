@@ -591,7 +591,9 @@ function summariseRotation(rotation, roster) {
 function notifyDetection(tabId, centre, slotDatetime, personName) {
   const when = new Date(slotDatetime).toLocaleString();
   const who = personName ? `${personName}: ` : "";
-  const notificationId = `availo-slot-${tabId}-${Date.now()}`;
+  // Stable per-tab id so repeat detections update the same toast in place
+  // instead of stacking dozens of separate notifications.
+  const notificationId = `availo-slot-${tabId}`;
   notificationTabs.set(notificationId, tabId);
   chrome.notifications.create(notificationId, {
     type: "basic",

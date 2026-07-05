@@ -18,7 +18,7 @@
   let prefs = null; // { centre, targetDate }
   let observer = null;
   let rescanTimer = null;
-  let lastDetectionKey = null;
+  let alertedKeys = new Set();
   let activeSelectElement = null;
   let activeSlotInfo = null; // { datetime, centre }
   let loggedOutReported = false;
@@ -88,12 +88,21 @@
     loggedOutReported = false; // back on a real page — re-arm for a future sign-out
 
     const ranked = currentRankedRows();
-    const next = ranked.find((r) => `${r.centre}|${r.datetime}` !== lastDetectionKey);
-    if (next) offerSlot(next, { count: ranked.length });
+    // Forget slots that have left the page so a genuine re-appearance can alert
+    // again — but never re-offer a slot we've already alerted for on this page.
+    const presentKeys = new Set(ranked.map((r) => `${r.centre}|${r.datetime}`));
+    for (const key of [...alertedKeys]) if (!presentKeys.has(key)) alertedKeys.delete(key);
+    // Only ever alert on the SOONEST matching slot, and only once. We re-alert
+    // when the soonest changes — it got taken and a later one is now first, or a
+    // new even-earlier slot appeared — never repeatedly for slots already seen.
+    const soonest = ranked[0];
+    if (soonest && !alertedKeys.has(`${soonest.centre}|${soonest.datetime}`)) {
+      offerSlot(soonest, { count: ranked.length });
+    }
   }
 
   function offerSlot(rowInfo, { count = 1 } = {}) {
-    lastDetectionKey = `${rowInfo.centre}|${rowInfo.datetime}`;
+    alertedKeys.add(`${rowInfo.centre}|${rowInfo.datetime}`);
     activeSelectElement = rowInfo.selectEl || rowInfo.el;
     activeSlotInfo = { centre: rowInfo.centre, datetime: rowInfo.datetime };
 
@@ -104,11 +113,16 @@
       page_url: window.location.href,
     });
 
-    showBanner(rowInfo.centre, rowInfo.datetime, { count });
-    // Auto-highlight the moment we detect it, so someone who remotes in / comes
-    // back sees it already ringed and is one click from Select. (Highlight only —
-    // the extension still never clicks it.)
-    highlight(activeSelectElement);
+    // Our own banner + highlight writes must not wake the MutationObserver —
+    // otherwise they feed straight back into scanForSlots and, with two or more
+    // matching slots, ping-pong into a notification storm.
+    withObserverPaused(() => {
+      showBanner(rowInfo.centre, rowInfo.datetime, { count });
+      // Auto-highlight the moment we detect it, so someone who remotes in / comes
+      // back sees it already ringed and is one click from Select. (Highlight only —
+      // the extension still never clicks it.)
+      highlight(activeSelectElement);
+    });
   }
 
   function showBanner(centre, datetime, { count = 1 } = {}) {
@@ -177,7 +191,7 @@
 
     activeSlotInfo = { centre: target.centre, datetime: target.datetime };
     activeSelectElement = target.selectEl || target.el;
-    lastDetectionKey = `${target.centre}|${target.datetime}`;
+    alertedKeys.add(`${target.centre}|${target.datetime}`);
 
     chrome.runtime.sendMessage({
       type: "HOLD_CLICKED", // telemetry: "user is going for this slot"
@@ -185,13 +199,15 @@
       slot_datetime: new Date(activeSlotInfo.datetime).toISOString(),
     });
 
-    highlight(activeSelectElement);
+    withObserverPaused(() => {
+      highlight(activeSelectElement);
 
-    if (replaced) {
-      infoBanner(`<strong>That one just went.</strong> We've highlighted the next earliest instead:<br>${target.centre} — ${new Date(target.datetime).toLocaleString()}<br><span style="color:#67766c;">Click <strong>Select</strong> on it to secure your test.</span>`);
-    } else {
-      removeBanner();
-    }
+      if (replaced) {
+        infoBanner(`<strong>That one just went.</strong> We've highlighted the next earliest instead:<br>${target.centre} — ${new Date(target.datetime).toLocaleString()}<br><span style="color:#67766c;">Click <strong>Select</strong> on it to secure your test.</span>`);
+      } else {
+        removeBanner();
+      }
+    });
 
     chrome.runtime.sendMessage({
       type: "HOLD_RESULT",
@@ -221,6 +237,17 @@
     document.body.appendChild(banner);
   }
 
+  // Run a DOM write with the MutationObserver detached, so Availo's own banner /
+  // highlight edits don't retrigger scanForSlots (which caused a detection loop).
+  function withObserverPaused(fn) {
+    if (observer) observer.disconnect();
+    try {
+      fn();
+    } finally {
+      if (observer && watching) observer.observe(document.body, { childList: true, subtree: true });
+    }
+  }
+
   function startWatching(newPrefs) {
     // Guard against double-init (initial WATCH_START vs a resume after reload).
     if (observer) observer.disconnect();
@@ -228,7 +255,7 @@
 
     watching = true;
     prefs = newPrefs;
-    lastDetectionKey = null;
+    alertedKeys = new Set();
     activeSelectElement = null;
     activeSlotInfo = null;
     loggedOutReported = false;
