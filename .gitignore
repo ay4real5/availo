@@ -2,6 +2,7 @@ node_modules/
 dist/
 chrome-extension/chrome-build/
 chrome-extension/firefox-build/
+chrome-extension/_smoke-out/
 *.log
 .env
 .env.*

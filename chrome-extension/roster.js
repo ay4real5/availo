@@ -141,6 +141,40 @@ function rosterPersonToVault(person) {
   };
 }
 
+// Pure rotation state machine. Given the current rotation, the clock, and the
+// pacing, decide the next phase — with NO side effects, so it's unit-testable.
+// Phases: watching → cooldown → (next person) watching → … → break → loop.
+// `action` tells the caller (background.js) which side effect to run:
+//   "none"        — still within the phase, or paused (queue); do nothing
+//   "toCooldown"  — this person's turn ended; end their watch + short cooldown
+//   "toWatching"  — start the next person (or loop back after a break)
+//   "toBreak"     — everyone's had a turn; take a long break before looping
+function rosterNextPhase(rotation, now, pacing) {
+  const keep = (action) => ({
+    phase: rotation.phase, index: rotation.index, phaseUntil: rotation.phaseUntil, action,
+  });
+  if (!rotation || rotation.paused) return keep("none");
+  if (now < rotation.phaseUntil) return keep("none");
+
+  const order = rotation.order || [];
+  const min = 60 * 1000;
+
+  if (rotation.phase === "watching") {
+    return { phase: "cooldown", index: rotation.index, phaseUntil: now + pacing.cooldownSeconds * 1000, action: "toCooldown" };
+  }
+  if (rotation.phase === "cooldown") {
+    const index = rotation.index + 1;
+    if (index >= order.length) {
+      return { phase: "break", index: 0, phaseUntil: now + pacing.breakMinutes * min, action: "toBreak" };
+    }
+    return { phase: "watching", index, phaseUntil: now + pacing.watchMinutes * min, action: "toWatching" };
+  }
+  if (rotation.phase === "break") {
+    return { phase: "watching", index: 0, phaseUntil: now + pacing.watchMinutes * min, action: "toWatching" };
+  }
+  return keep("none");
+}
+
 const AvailoRoster = {
   MAX_PEOPLE,
   MAX_CENTRES,
@@ -158,6 +192,7 @@ const AvailoRoster = {
   getPacing: rosterGetPacing,
   savePacing: rosterSavePacing,
   personToVault: rosterPersonToVault,
+  nextPhase: rosterNextPhase,
 };
 
 if (typeof self !== "undefined") self.AvailoRoster = AvailoRoster;

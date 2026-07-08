@@ -181,50 +181,28 @@ async function beginPersonWatch(rotation) {
 // Move the rotation forward one phase when its timer is up. Called from the
 // watch-tick alarm. Returns the (possibly updated) rotation.
 async function advanceRotation(rotation, now) {
-  if (!rotation || rotation.paused) return rotation;
-  if (now < rotation.phaseUntil) return rotation; // still within the current phase
-
   const pacing = await AvailoRoster.getPacing();
+  // Pure decision (unit-tested in test/rotation.test.js); we run the side effects.
+  const d = AvailoRoster.nextPhase(rotation, now, pacing);
+  if (d.action === "none") return rotation;
 
-  if (rotation.phase === "watching") {
+  const updated = { ...rotation, phase: d.phase, index: d.index, phaseUntil: d.phaseUntil };
+
+  if (d.action === "toCooldown") {
     // Time's up for this person — end their watch and start a short cooldown.
-    await endCurrentWatch(rotation.tabId);
-    rotation.phase = "cooldown";
-    rotation.phaseUntil = now + pacing.cooldownSeconds * 1000;
-    notifyCooldown(rotation.tabId);
-    await setRotation(rotation);
-    return rotation;
+    await endCurrentWatch(updated.tabId);
+    notifyCooldown(updated.tabId);
+    await setRotation(updated);
+  } else if (d.action === "toBreak") {
+    // Full cycle complete — take a long break before looping.
+    notifyBreak(updated.tabId, pacing.breakMinutes);
+    await setRotation(updated);
+  } else if (d.action === "toWatching") {
+    // Start the next person (or loop back after a break).
+    await setRotation(updated);
+    await beginPersonWatch(updated);
   }
-
-  if (rotation.phase === "cooldown") {
-    rotation.index += 1;
-    if (rotation.index >= rotation.order.length) {
-      // Full cycle complete — take a long break before looping.
-      rotation.index = 0;
-      rotation.phase = "break";
-      rotation.phaseUntil = now + pacing.breakMinutes * 1000 * 60;
-      notifyBreak(rotation.tabId, pacing.breakMinutes);
-      await setRotation(rotation);
-      return rotation;
-    }
-    rotation.phase = "watching";
-    rotation.phaseUntil = now + pacing.watchMinutes * 1000 * 60;
-    await setRotation(rotation);
-    await beginPersonWatch(rotation);
-    return rotation;
-  }
-
-  if (rotation.phase === "break") {
-    // Break over — start the cycle again from the top.
-    rotation.index = 0;
-    rotation.phase = "watching";
-    rotation.phaseUntil = now + pacing.watchMinutes * 1000 * 60;
-    await setRotation(rotation);
-    await beginPersonWatch(rotation);
-    return rotation;
-  }
-
-  return rotation;
+  return updated;
 }
 
 // End the active watch for a tab WITHOUT tearing down rotation state.
