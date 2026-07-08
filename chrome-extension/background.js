@@ -1,6 +1,24 @@
-importScripts("refresh-schedule.js", "roster.js"); // nextRefreshDelay(); AvailoRoster
+// Chrome: service worker → importScripts. Firefox (esp. Android) loads these as
+// event-page scripts listed in background.scripts (see build.mjs), so the globals
+// are already defined and importScripts doesn't exist — guard for both.
+// roster.js provides AvailoRoster; refresh-schedule.js provides nextRefreshDelay().
+if (typeof importScripts === "function") importScripts("refresh-schedule.js", "roster.js");
 
-const DEFAULT_BACKEND_URL = "http://localhost:4000";
+// Firefox Android may not support notifications/action badges. Stub them to no-ops
+// if absent so the six notify functions and their top-level listener registrations
+// never throw there — the in-page banner + backend push are the real mobile alerts.
+if (!chrome.notifications) {
+  chrome.notifications = {
+    create() {}, clear() {},
+    onClicked: { addListener() {} },
+    onButtonClicked: { addListener() {} },
+  };
+}
+if (!chrome.action) {
+  chrome.action = { setBadgeText() {}, setBadgeBackgroundColor() {} };
+}
+
+const DEFAULT_BACKEND_URL = "https://availo-backend-4dbx.onrender.com";
 
 // Single key holding the roster rotation state (chrome.storage.session so it
 // survives MV3 service-worker suspension but resets when Chrome restarts).

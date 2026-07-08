@@ -352,6 +352,32 @@ test("admin endpoints fail closed in production without ADMIN_TOKEN", async () =
   }
 });
 
+test("CORS allows the browser extension's origin in production", async () => {
+  const prev = process.env.NODE_ENV;
+  process.env.NODE_ENV = "production";
+  try {
+    const ext = await request(app)
+      .get("/health")
+      .set("Origin", "chrome-extension://abcdefghijklmnopabcdefghijklmnop")
+      .expect(200);
+    assert.equal(ext.body.status, "ok");
+
+    const ff = await request(app)
+      .get("/health")
+      .set("Origin", "moz-extension://11111111-2222-3333-4444-555555555555")
+      .expect(200);
+    assert.equal(ff.body.status, "ok");
+
+    // A random third-party site is still rejected.
+    await request(app)
+      .get("/health")
+      .set("Origin", "https://evil.example.com")
+      .expect(500);
+  } finally {
+    process.env.NODE_ENV = prev;
+  }
+});
+
 test("GET /api/scraper/booking-requests requires the scraper key", async () => {
   await request(app)
     .get("/api/scraper/booking-requests")

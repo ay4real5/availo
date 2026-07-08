@@ -1,4 +1,4 @@
-const DEFAULT_BACKEND_URL = "http://localhost:4000";
+const DEFAULT_BACKEND_URL = "https://availo-backend-4dbx.onrender.com";
 
 // The roster + pacing live ONLY in chrome.storage.local on this device and are
 // never sent to the backend (see roster.js). AvailoRoster is loaded before this

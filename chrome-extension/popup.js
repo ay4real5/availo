@@ -1,9 +1,10 @@
 const appEl = document.getElementById("app");
 
-// The local practice fixture (served over http, see chrome-extension/dev-fixture).
-// Rehearse the exact fill → advance → highlight → click sequence with zero risk,
-// against a page that mimics the real DVSA journey but never touches DVSA.
-const PRACTICE_URL = "http://localhost:5555/login.html";
+// Dev-only constants come from build-config.js (empty in packaged store builds,
+// so shipped code carries no dev origins and hides the local Practice rehearsal).
+const PRACTICE_URL = typeof AVAILO_PRACTICE_URL !== "undefined" ? AVAILO_PRACTICE_URL : "";
+const DEV_HOST_MATCH = typeof AVAILO_DEV_HOST_MATCH !== "undefined" ? AVAILO_DEV_HOST_MATCH : "";
+const IS_PACKAGED = typeof AVAILO_PACKAGED !== "undefined" && AVAILO_PACKAGED;
 
 function sendToBackground(message) {
   return chrome.runtime.sendMessage(message);
@@ -16,7 +17,8 @@ async function getCurrentTab() {
 
 function isSupported(url) {
   if (!url) return false;
-  return /gov\.uk|localhost:8000|localhost:5555/.test(url);
+  const re = DEV_HOST_MATCH ? new RegExp(`gov\\.uk|${DEV_HOST_MATCH}`) : /gov\.uk/;
+  return re.test(url);
 }
 
 function fmtMinsSecs(totalSeconds) {
@@ -129,7 +131,7 @@ async function render() {
       addBtn.addEventListener("click", () => chrome.runtime.openOptionsPage());
       wrap.appendChild(addBtn);
     }
-    wrap.appendChild(practiceLink());
+    if (!IS_PACKAGED) wrap.appendChild(practiceLink());
     appEl.appendChild(wrap);
     return;
   }
@@ -146,7 +148,7 @@ async function render() {
       addBtn.addEventListener("click", () => chrome.runtime.openOptionsPage());
       wrap.appendChild(addBtn);
       wrap.appendChild(diagnosticControls(tab));
-      wrap.appendChild(practiceLink());
+      if (!IS_PACKAGED) wrap.appendChild(practiceLink());
       appEl.appendChild(wrap);
       return;
     }
@@ -186,7 +188,7 @@ async function render() {
     }
 
     wrap.appendChild(diagnosticControls(tab));
-    wrap.appendChild(practiceLink());
+    if (!IS_PACKAGED) wrap.appendChild(practiceLink());
     appEl.appendChild(wrap);
     return;
   }
@@ -246,7 +248,7 @@ async function render() {
   wrap.appendChild(stopBtn);
 
   wrap.appendChild(diagnosticControls(tab));
-  wrap.appendChild(practiceLink());
+  if (!IS_PACKAGED) wrap.appendChild(practiceLink());
   appEl.appendChild(wrap);
 }
 

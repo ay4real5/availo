@@ -1,5 +1,7 @@
 node_modules/
 dist/
+chrome-extension/chrome-build/
+chrome-extension/firefox-build/
 *.log
 .env
 .env.*

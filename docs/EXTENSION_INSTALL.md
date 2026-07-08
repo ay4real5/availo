@@ -26,6 +26,24 @@ step 2.
 
 Edge works the same way (`edge://extensions`).
 
+### On an Android phone (no laptop needed) — Firefox
+No computer? Run Availo on your own Android phone:
+1. Install **Firefox for Android** from the Play Store.
+2. Add the Availo add-on (from addons.mozilla.org once published; before then a
+   tester can build it with `npm run build:firefox` and load `firefox-build/` via
+   Firefox `about:debugging`).
+3. Open the DVSA "change your driving test" page in Firefox, sign in, and use it
+   like the desktop steps below. It runs on **your** phone, in **your** session.
+
+> Phones pause background tabs aggressively, so "leave it running" is less reliable
+> on a phone — it works best while Firefox is open on the DVSA tab; the email/phone
+> push alerts are your safety net. **iPhone** support is a later phase (Safari needs
+> a separate App Store build).
+
+### Building the store packages (maintainers)
+`npm run build:all` in `chrome-extension/` produces clean `chrome-build/` and
+`firefox-build/` (prod backend, no localhost/dev files) — see `docs/PUBLISHING.md`.
+
 ---
 
 ## 2. Sign in and add your details (one time)

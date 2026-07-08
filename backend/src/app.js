@@ -42,10 +42,14 @@ const corsAllowlist = (process.env.CORS_ORIGIN || "")
   .map((o) => o.trim())
   .filter(Boolean);
 const AVAILO_VERCEL_ORIGIN = /^https:\/\/availo-frontend[a-z0-9-]*\.vercel\.app$/;
+// The published browser extension calls us directly; its requests carry an
+// extension-context Origin (chrome-extension://<id> or moz-extension://<id>).
+const EXTENSION_ORIGIN = /^(chrome-extension|moz-extension|safari-web-extension):\/\//;
 
 function isAllowedOrigin(origin) {
   if (corsAllowlist.includes(origin)) return true;
   if (AVAILO_VERCEL_ORIGIN.test(origin)) return true;
+  if (EXTENSION_ORIGIN.test(origin)) return true;
   return false;
 }
 

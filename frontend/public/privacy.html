@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Availo — Privacy Policy</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 20px; color: #232a22; line-height: 1.6; background: #f3f7f2; }
+    h1 { color: #1f4e44; }
+    h2 { color: #2f6f62; margin-top: 32px; font-size: 1.2rem; }
+    code { background: #e4f0ec; padding: 1px 5px; border-radius: 4px; }
+    .updated { color: #67766c; font-size: 0.9rem; }
+    a { color: #2f6f62; }
+    .box { background: #fff; border: 1px solid #dce6dd; border-radius: 12px; padding: 4px 22px 18px; }
+  </style>
+</head>
+<body>
+  <h1>Availo — Privacy Policy</h1>
+  <p class="updated">Last updated: July 2026</p>
+
+  <div class="box">
+    <p>
+      Availo helps you find an earlier UK driving-test slot. It is a browser extension plus a
+      companion web app and backend. This policy explains exactly what data we handle and where it
+      goes. In plain terms: <strong>the sensitive details you'd use to book (your driving licence
+      number and booking reference) stay on your own device and are never sent to our servers.</strong>
+    </p>
+
+    <h2>What we collect and why</h2>
+    <ul>
+      <li><strong>Account details (email, password)</strong> — to create and secure your Availo
+        account. Passwords are stored only as a secure hash on our backend; we never see your
+        plain-text password.</li>
+      <li><strong>Your alert preferences</strong> (test centre, current test date, search window,
+        notification choices) — stored on our backend so we can alert you about matching slots.</li>
+      <li><strong>Your driving licence number and booking reference</strong> — stored <strong>only in
+        your own browser</strong> (local extension storage), used solely to fill the DVSA forms for
+        you, like a password manager. <strong>These are never transmitted to Availo's servers.</strong></li>
+      <li><strong>Watch activity events</strong> — when the extension spots a slot, is blocked by
+        DVSA, or is signed out, it sends a minimal event (test centre, time, timestamps) to our
+        backend so we can send your alerts. It does not send the contents of the DVSA page.</li>
+      <li><strong>Notification subscription</strong> — if you enable phone/desktop push, your
+        browser's push subscription is stored on our backend so we can deliver alerts.</li>
+    </ul>
+
+    <h2>What we do NOT do</h2>
+    <ul>
+      <li>We never book, hold, or pay for a test on your behalf — you always do that yourself.</li>
+      <li>We never store your DVSA login credentials on our servers.</li>
+      <li>We never sell or share your data with advertisers or third parties.</li>
+      <li>The extension never tries to bypass DVSA's security checks; if it sees one, it stops.</li>
+    </ul>
+
+    <h2>Who we share data with (service providers)</h2>
+    <ul>
+      <li><strong>Supabase</strong> — hosts our database (your account, preferences, events).</li>
+      <li><strong>Render</strong> — hosts our backend service.</li>
+      <li><strong>Resend</strong> — sends alert emails (receives your email address and the alert
+        content only when an alert is sent).</li>
+      <li><strong>Browser push services</strong> (e.g. Google/Mozilla/Apple) — deliver push
+        notifications if you enable them.</li>
+    </ul>
+
+    <h2>Data retention & your control</h2>
+    <p>
+      You can clear your locally-stored licence/booking details any time from the extension's
+      settings ("Clear saved details"). You can turn off notifications, stop watching, or ask us to
+      delete your account and its data by contacting us.
+    </p>
+
+    <h2>Permissions the extension uses</h2>
+    <p>
+      It runs only on the DVSA "change your driving test" pages (<code>*.gov.uk</code>), uses local
+      storage for your settings, and (optionally) notifications and background alarms so it can alert
+      you and keep watching. It requests no access to your other browsing.
+    </p>
+
+    <h2>Contact</h2>
+    <p>
+      Questions or a deletion request: <a href="mailto:privacy@availo.app">privacy@availo.app</a>.
+    </p>
+    <p style="color:#67766c;font-size:0.9rem;">Availo is an independent tool and is not affiliated with DVSA or GOV.UK.</p>
+  </div>
+</body>
+</html>

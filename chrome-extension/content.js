@@ -1,5 +1,5 @@
 (() => {
-  const BACKEND_URL = "http://localhost:4000";
+  const BACKEND_URL = "https://availo-backend-4dbx.onrender.com";
   const SESSION_KEY = "testi_session_id";
   let sessionId = localStorage.getItem(SESSION_KEY) || crypto.randomUUID();
   localStorage.setItem(SESSION_KEY, sessionId);
