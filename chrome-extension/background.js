@@ -17,6 +17,12 @@ if (!chrome.notifications) {
 if (!chrome.action) {
   chrome.action = { setBadgeText() {}, setBadgeBackgroundColor() {} };
 }
+// chrome.alarms may be missing/limited on iOS Safari. Stub it so the background
+// scripts and top-level listeners don't throw; watching then degrades to scanning
+// while the DVSA tab is foregrounded (iOS suspends background work anyway).
+if (!chrome.alarms) {
+  chrome.alarms = { get(_n, cb) { if (cb) cb(null); }, create() {}, clear() {}, onAlarm: { addListener() {} } };
+}
 
 const DEFAULT_BACKEND_URL = "https://availo-backend-4dbx.onrender.com";
 

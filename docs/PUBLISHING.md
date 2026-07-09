@@ -115,6 +115,10 @@ can book it faster. It does not book or reserve anything itself.
 4. Submit. Once approved it's installable on **Firefox for Android** too (that's the
    no-laptop path — see `docs/EXTENSION_INSTALL.md`).
 
+## 5b. iPhone (Safari / App Store) — 🔴 YOU, on a Mac
+iPhone is a separate, Mac-only path (Xcode + Apple Developer account). Build with
+`npm run build:safari` and follow [`IOS_BUILD.md`](IOS_BUILD.md) end-to-end.
+
 ---
 
 ## 6. Screenshot shot-list (🔴 YOU, in a real browser)

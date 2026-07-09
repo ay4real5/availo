@@ -6,6 +6,7 @@
     "test": "node --test",
     "build:chrome": "node build.mjs chrome",
     "build:firefox": "node build.mjs firefox",
+    "build:safari": "node build.mjs safari",
     "build:all": "node build.mjs all"
   }
 }

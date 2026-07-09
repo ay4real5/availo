@@ -37,12 +37,19 @@ No computer? Run Availo on your own Android phone:
 
 > Phones pause background tabs aggressively, so "leave it running" is less reliable
 > on a phone — it works best while Firefox is open on the DVSA tab; the email/phone
-> push alerts are your safety net. **iPhone** support is a later phase (Safari needs
-> a separate App Store build).
+> push alerts are your safety net.
+
+### On an iPhone (Safari)
+iPhone needs a **Safari extension packaged as an App Store app** (Apple's rule) — a
+Mac/Xcode job documented step-by-step in [`IOS_BUILD.md`](IOS_BUILD.md). On iPhone it
+watches + highlights + autofills while Safari is open on the DVSA tab; background
+watching is limited by iOS, so the phone push + email are the away safety-net. Until
+that ships, iPhone users get the **alerts** (web app + push/email) and book manually.
 
 ### Building the store packages (maintainers)
-`npm run build:all` in `chrome-extension/` produces clean `chrome-build/` and
-`firefox-build/` (prod backend, no localhost/dev files) — see `docs/PUBLISHING.md`.
+`npm run build:all` in `chrome-extension/` produces clean `chrome-build/`,
+`firefox-build/`, and `safari-build/` (prod backend, no localhost/dev files) — see
+[`PUBLISHING.md`](PUBLISHING.md) (Chrome/Firefox) and [`IOS_BUILD.md`](IOS_BUILD.md) (iPhone).
 
 ---
 

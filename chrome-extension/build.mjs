@@ -59,15 +59,22 @@ function build(target) {
   const outDir = path.join(dir, `${target}-build`);
   const manifest = cleanManifest();
 
+  // roster.js + refresh-schedule.js define globals (AvailoRoster, nextRefreshDelay)
+  // that background.js uses, so they must load first in the non-SW background.
+  const eventPageBg = { scripts: ["refresh-schedule.js", "roster.js", "background.js"] };
+
   if (target === "firefox") {
     // Firefox (esp. Android): event-page background, not a service worker.
     delete manifest.background.service_worker;
-    // roster.js + refresh-schedule.js define globals (AvailoRoster, nextRefreshDelay)
-    // that background.js uses, so they must load first.
-    manifest.background = { scripts: ["refresh-schedule.js", "roster.js", "background.js"] };
+    manifest.background = eventPageBg;
     manifest.browser_specific_settings = {
       gecko: { id: "availo-fastpath@availo.app", strict_min_version: "120.0" },
     };
+  } else if (target === "safari") {
+    // Safari / iOS: use the non-persistent background scripts model (what Xcode's
+    // safari-web-extension-converter expects), no gecko block. See docs/IOS_BUILD.md.
+    delete manifest.background.service_worker;
+    manifest.background = eventPageBg;
   }
   // chrome: keep background.service_worker as authored.
 
@@ -100,10 +107,11 @@ function build(target) {
   console.log(`✓ ${target}-build ready (v${VERSION})`);
 }
 
+const ALL = ["chrome", "firefox", "safari"];
 const arg = (process.argv[2] || "all").toLowerCase();
-const targets = arg === "all" ? ["chrome", "firefox"] : [arg];
+const targets = arg === "all" ? ALL : [arg];
 for (const t of targets) {
-  if (t !== "chrome" && t !== "firefox") throw new Error(`unknown target: ${t}`);
+  if (!ALL.includes(t)) throw new Error(`unknown target: ${t} (use ${ALL.join(" | ")} | all)`);
   build(t);
 }
-console.log("Zip the build folder's contents to submit (Chrome Web Store / addons.mozilla.org).");
+console.log("Chrome/Firefox: zip the build folder to submit. Safari: feed safari-build/ to Xcode — see docs/IOS_BUILD.md.");
