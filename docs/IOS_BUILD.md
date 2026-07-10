@@ -11,6 +11,33 @@ guide is the exact playbook.
 
 ---
 
+## Build without a Mac (GitHub Actions) — recommended if you don't own a Mac
+
+You don't need to buy a Mac to *build* this. The repo includes a workflow,
+[`.github/workflows/safari-build.yml`](../.github/workflows/safari-build.yml), that
+runs on GitHub's **cloud macOS runner** (Xcode preinstalled). It does steps 1–4
+below for you and hands back the finished Xcode project.
+
+**Run it:** GitHub → your repo → **Actions** tab → **safari-build** →
+**Run workflow**. (It also runs automatically when you push a `v*` release tag.)
+
+**What you get:** a downloadable artifact **`availo-ios-xcode-project`** containing
+the generated `ios/` Xcode project, plus a log showing an unsigned iOS-Simulator
+**compile check** that proves it builds.
+
+**Caveats — read these:**
+- This workflow was authored on Windows and is **best-effort/untested from there**.
+  The converter's generated Xcode **scheme name** is the likely first-run tweak — the
+  compile step prints the real scheme names (`xcodebuild -list`) and is marked
+  non-fatal, so the project artifact is produced either way; if the compile failed on
+  the scheme name, update the `-scheme` value in the workflow from the log and re-run.
+- It **stops short of signing and App Store submission** — that genuinely needs your
+  **Apple Developer account** ($99/yr) and signing secrets. Do that part on a Mac
+  (steps 3–5 below) or extend the workflow with your signing secrets. Either way the
+  **submission** in [step 5](#5-submit-to-the-app-store) is yours.
+
+---
+
 ## Be honest about what iPhone can and can't do
 
 **Works on iPhone (while Safari is open on the DVSA tab):**

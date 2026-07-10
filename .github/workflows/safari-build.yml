@@ -1,0 +1,81 @@
+# Build the iPhone (Safari) extension on a cloud Mac — so you don't need to own one.
+#
+# GitHub's macOS runners ship with Xcode + Apple's safari-web-extension-converter
+# preinstalled, so this job turns the prepared `safari-build/` into a real iOS Xcode
+# project, tries an unsigned Simulator compile to prove it builds, and uploads the
+# Xcode project as a downloadable artifact. See docs/IOS_BUILD.md.
+#
+# What this does NOT do: sign the app or upload to the App Store. That needs an Apple
+# Developer account ($99/yr) + signing secrets and is a documented follow-up.
+#
+# NOTE: authored on Windows and untested from there — the converter's generated Xcode
+# scheme name (step "Compile") is the likely first-run tweak. The compile step is
+# `continue-on-error`, so even if the scheme name is off the run still uploads the
+# converted project for you to inspect, and the log shows the real scheme names.
+
+name: safari-build
+
+on:
+  workflow_dispatch: {} # manual "Run workflow" button
+  push:
+    tags: ["v*"] # a release tag also produces an iOS build
+
+jobs:
+  safari:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      # Single root lockfile (npm workspaces): install from the repo root.
+      - run: npm ci
+        working-directory: ${{ github.workspace }}
+
+      - name: Build the Safari-ready extension folder
+        run: npm run build:safari
+        working-directory: ./chrome-extension
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Convert to an iOS Xcode project
+        run: |
+          xcrun safari-web-extension-converter chrome-extension/safari-build \
+            --app-name Availo \
+            --bundle-identifier app.availo.ios \
+            --project-location ./ios \
+            --ios-only \
+            --no-open \
+            --no-prompt \
+            --force
+
+      # Best-effort: prove the generated project compiles for the iOS Simulator,
+      # unsigned. `-list` prints the real scheme names so the scheme below can be
+      # corrected from the log if this first run flags it. Non-fatal so the artifact
+      # is still uploaded regardless.
+      - name: Compile (unsigned, iOS Simulator)
+        continue-on-error: true
+        run: |
+          xcodebuild -list -project ios/Availo/Availo.xcodeproj
+          xcodebuild \
+            -project ios/Availo/Availo.xcodeproj \
+            -scheme "Availo (iOS)" \
+            -sdk iphonesimulator \
+            -configuration Debug \
+            build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+
+      - name: Upload the Xcode project + Safari build
+        uses: actions/upload-artifact@v4
+        with:
+          name: availo-ios-xcode-project
+          path: |
+            ios/
+            chrome-extension/safari-build/
+          if-no-files-found: error

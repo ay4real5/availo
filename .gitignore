@@ -4,6 +4,8 @@ chrome-extension/chrome-build/
 chrome-extension/firefox-build/
 chrome-extension/safari-build/
 chrome-extension/_smoke-out/
+# Generated iOS Xcode project (safari-web-extension-converter output; CI artifact)
+/ios/
 *.log
 .env
 .env.*
