@@ -64,7 +64,7 @@ jobs:
           xcodebuild -list -project ios/Availo/Availo.xcodeproj
           xcodebuild \
             -project ios/Availo/Availo.xcodeproj \
-            -scheme "Availo (iOS)" \
+            -scheme "Availo" \
             -sdk iphonesimulator \
             -configuration Debug \
             build \
