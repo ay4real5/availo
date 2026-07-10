@@ -16,6 +16,9 @@ dev-store.json
 **/.debug-store.json
 .DS_Store
 
+# Separate project that lives alongside this working copy — never part of Availo
+/Abims2026/
+
 # Python
 __pycache__/
 *.pyc

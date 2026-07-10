@@ -4,6 +4,11 @@ Everything you need to get the extension into the two stores so ordinary users c
 install it with one click. Steps marked **🔴 YOU** need a human (accounts,
 screenshots, the actual upload/review); everything else is already done in the repo.
 
+> **Before you publish, run the test ladder in [`TESTING.md`](TESTING.md)** — it
+> proves the extension, alerts, and detection work end-to-end (without ever
+> automating a real DVSA booking) and ends with a short closed beta. Don't submit to
+> the stores until that beta is clean.
+
 ---
 
 ## 0. One-time prerequisites — 🔴 YOU
