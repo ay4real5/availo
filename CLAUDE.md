@@ -4,6 +4,16 @@
 > read it first. It captures the **rules that must never change** and where things
 > stand, so any Claude Code (on any machine) picks up where we left off.
 
+## Continuing on another machine
+Claude Code auto-loads this file, so you don't need to re-explain the project. On a new
+laptop, clone the repo, open it in Claude Code, and paste a starter like:
+
+> "This is the Availo project — read `CLAUDE.md` and `docs/` for context. We're
+> continuing where we left off. Next I want to **[your next task]**."
+
+Or just: *"Read `CLAUDE.md` and give me the Availo status and what's left."* You only
+supply the next goal; everything else is in this file.
+
 ## What Availo is
 A tool that helps **UK learner drivers find and grab earlier DVSA driving-test
 cancellation slots** — without breaking DVSA's rules and without auto-booking. It's a

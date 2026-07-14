@@ -2,6 +2,12 @@
 
 A browser-based MVP for a Testi-style driving-test cancellation finder. It simulates the scraper, tracks sessions, evaluates anti-bot rules, and exposes an observable dashboard.
 
+## Working on this with Claude Code
+Open the repo in Claude Code on any machine — it auto-loads [`CLAUDE.md`](CLAUDE.md)
+(project context + the rules that must never change). To continue where we left off,
+just say: *"Read `CLAUDE.md` and `docs/` for context — we're continuing the Availo
+project. Next I want to **[your next task]**."*
+
 ## Project structure
 
 ```
