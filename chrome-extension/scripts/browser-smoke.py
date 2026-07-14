@@ -11,8 +11,8 @@ asserts it correctly recognises the pages and slots. This proves the risky part
 Why this shape: loading the packed extension + its MV3 service worker is
 unreliable in headless Chromium (and the Edge devtools channel is blocked by this
 machine's admin policy), so we inject the same source files the extension uses and
-call them directly against the live DOM. The in-page banner / rotation UI is
-covered by the unit tests (incl. test/rotation.test.js) + a manual load-unpacked.
+call them directly against the live DOM. The in-page banner UI is covered by
+the unit tests + a manual load-unpacked.
 
 Run:   python scripts/browser-smoke.py [OUTPUT_DIR]
 Needs: playwright (pip) with chromium; falls back cleanly if unavailable.

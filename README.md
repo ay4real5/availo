@@ -321,8 +321,7 @@ The Chrome extension in `chrome-extension/` is a Manifest V3 extension that help
 
 ### Features
 
-- **Fast-Path** — auto-fills the DVSA sign-in and search forms and jumps to the earliest available slot.
-- **Roster mode** — watches for up to 3 people on one laptop, one at a time, with configurable pacing and rotation.
+- **Fast-Path** — auto-fills the DVSA sign-in and search forms and highlights the earliest available slot.
 - **Slot detection** — highlights the earliest matching slot and alerts the user once per slot (notifies again only when an even-earlier slot appears, preventing notification storms).
 - **Queue detection** — recognises DVSA / Queue-it waiting rooms and pauses watching until the user is through.
 - **Block / signed-out detection** — stops watching and alerts the user on CAPTCHA/challenge pages or if DVSA signs them out.
@@ -333,8 +332,8 @@ The Chrome extension in `chrome-extension/` is a Manifest V3 extension that help
 1. Start the backend: `cd backend && npm start` (port 4000).
 2. Start the dev fixture: `cd chrome-extension/dev-fixture && python3 -m http.server 5555` (port 5555).
 3. Load the unpacked extension from `chrome-extension/` in Chrome → `chrome://extensions`.
-4. Open the extension options page and configure a 2–3 person roster with pacing.
-5. Run through the fixture pages (`login.html`, `search.html`, `results.html`, `queue.html`, `?blocked=1`, `?loggedout=1`) to verify Fast-Path, rotation, slot detection, and edge cases.
+4. Open the extension options page and enter your licence, booking reference, and test centre.
+5. Run through the fixture pages (`login.html`, `search.html`, `results.html`, `queue.html`, `?blocked=1`, `?loggedout=1`) to verify Fast-Path, slot detection, and edge cases.
 
 ### Extension tests
 

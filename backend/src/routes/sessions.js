@@ -35,52 +35,6 @@ sessionsRouter.get("/analytics/summary", adminAuth, async (_req, res, next) => {
   }
 });
 
-sessionsRouter.post("/behaviour", async (req, res, next) => {
-  try {
-    const payload = z
-      .object({
-        session_id: z.string().min(1),
-        url: z.string().optional(),
-        timestamp: z.string().datetime().optional(),
-        scroll_count: z.number().int().min(0).default(0),
-        click_count: z.number().int().min(0).default(0),
-        mouse_move_count: z.number().int().min(0).default(0),
-        viewport: z.record(z.any()).optional(),
-      })
-      .parse(req.body);
-
-    const sessionData = {
-      id: payload.session_id,
-      user_agent: req.get("user-agent"),
-      ip: req.sessionMeta?.ip || req.ip,
-      flags: {
-        scroll_count: payload.scroll_count,
-        click_count: payload.click_count,
-        mouse_move_count: payload.mouse_move_count,
-        viewport: payload.viewport,
-        url: payload.url,
-      },
-      started_at: payload.timestamp || new Date().toISOString(),
-    };
-
-    const { data: existing } = await supabase
-      .from("sessions")
-      .select("id")
-      .eq("id", payload.session_id)
-      .single();
-
-    if (existing) {
-      await supabase.from("sessions").update(sessionData).eq("id", payload.session_id);
-    } else {
-      await supabase.from("sessions").insert(sessionData);
-    }
-
-    res.json({ ok: true });
-  } catch (err) {
-    next(err);
-  }
-});
-
 sessionsRouter.put("/:id/flag", adminAuth, async (req, res, next) => {
   try {
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);

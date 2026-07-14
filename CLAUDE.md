@@ -31,25 +31,33 @@ accounts safe and the product legitimate:
   or pays**, and **never auto-submits** login or search unattended.
 - **Never** uses proxies or IP rotation. **Never** tries to evade DVSA security — it
   **STOPS** the moment it sees a block, CAPTCHA, or "there is a problem" page.
+- **Never collect or transmit behavioural telemetry** (mouse/scroll/click tracking,
+  fingerprinting, or anything designed to make automated activity look human to DVSA).
+  A prior version shipped an undisclosed `content.js` that did this — it's been removed
+  and must not come back in any form.
+- **Never pace or throttle activity for the purpose of hiding a pattern from DVSA**
+  (e.g. multi-account/single-IP rotation timed "so DVSA sees normal activity"). A prior
+  "roster mode" did this via `roster.js` — it's been removed in favour of a single-user
+  `vault.js`. Availo is single-user only; do not reintroduce multi-account rotation.
 - The user's **driving licence number and booking reference are stored only in the
-  browser** (`chrome.storage.local`) and are **never sent to Availo's servers**. The
-  backend never logs into DVSA and never receives sensitive data (only a short display
-  first-name label).
+  browser** (`chrome.storage.local`, via `vault.js`) and are **never sent to Availo's
+  servers**. The backend never logs into DVSA and never receives sensitive data (only a
+  short display first-name label).
 - **No server-side / unattended monitoring of DVSA.** Watching runs in the user's own
   browser session. Auto-refresh is deliberately slow (≥90s) and human-paced.
-- "Roster mode" (watch up to 3 people from one laptop) keeps all of the above, one
-  person at a time, with human-paced floors — never a bot pattern.
 
 If a request asks to cross any of these (auto-book, auto-hold, central login for users,
-IP rotation, faster/aggressive polling, bypassing a check), **decline and offer an
-in-bounds alternative.** This has come up repeatedly and the answer is always no.
+IP rotation, multi-account pacing/rotation, behavioural telemetry, faster/aggressive
+polling, bypassing a check), **decline and offer an in-bounds alternative.** This has
+come up repeatedly and the answer is always no.
 
 ## Layout
-- `chrome-extension/` — the MV3 extension (the core). Detection/autofill/watch/roster:
-  `dvsa-heuristics.js`, `selectors.js`, `watch-match.js`, `fastpath-util.js`,
-  `roster.js`, `background.js`, `popup.js`, `options.js`. `build.mjs` emits clean
-  store builds. Dev-only: `dev-fixture/` (fake DVSA pages), `serve-practice.ps1` +
-  `start-practice.cmd`, `scripts/browser-smoke.py`.
+- `chrome-extension/` — the MV3 extension (the core), single-user only. Detection/
+  autofill/watch: `dvsa-heuristics.js`, `selectors.js`, `watch-match.js`,
+  `fastpath-util.js`, `vault.js` (licence/booking-ref storage), `background.js`,
+  `popup.js`, `options.js`. `build.mjs` emits clean store builds. Dev-only:
+  `dev-fixture/` (fake DVSA pages), `serve-practice.ps1` + `start-practice.cmd`,
+  `scripts/browser-smoke.py`.
 - `backend/` — Node/Express + Supabase (Postgres), Web Push (VAPID) + email (Resend),
   JWT auth. Deployed on **Render**. Never touches DVSA.
 - `frontend/` — React/Vite PWA. Deployed on **Vercel**. Hosts `public/privacy.html`.
@@ -58,7 +66,7 @@ in-bounds alternative.** This has come up repeatedly and the answer is always no
 
 ## Key commands
 - Backend tests (43): `npm test` (repo root) — also `npm run lint`.
-- Extension tests (60): `cd chrome-extension && npm test`.
+- Extension tests (50): `cd chrome-extension && npm test`.
 - Build store packages: `cd chrome-extension && npm run build:all` → clean
   `chrome-build/ firefox-build/ safari-build/` (no localhost, prod backend baked in).
 - Detection smoke (real browser, 7 checks): `cd chrome-extension && python

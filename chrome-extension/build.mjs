@@ -5,11 +5,10 @@
 //   node build.mjs           -> both
 //
 // The working manifest.json stays dev-friendly (localhost origins for the local
-// practice fixture, the legacy behaviour content script). This packager produces
-// CLEAN store builds from it: only the gov.uk host, no localhost, no legacy
-// content.js, a packaged build flag, and the per-browser background shape. Single
-// source of truth = manifest.json; everything else is copied as-is because the
-// detection/autofill/watch logic is browser-agnostic.
+// practice fixture). This packager produces CLEAN store builds from it: only the
+// DVSA host, no localhost, a packaged build flag, and the per-browser background
+// shape. Single source of truth = manifest.json; everything else is copied as-is
+// because the detection/autofill/watch logic is browser-agnostic.
 
 import { readFileSync, writeFileSync, mkdirSync, copyFileSync, rmSync } from "node:fs";
 import path from "node:path";
@@ -18,12 +17,13 @@ import { fileURLToPath } from "node:url";
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const VERSION = "1.3.0";
 
-// Runtime files the SHIPPED product uses. Note: content.js (legacy activity
-// telemetry), dev-fixture/, test/, and the build scripts are intentionally excluded.
+// Runtime files the SHIPPED product uses. Note: dev-fixture/, test/, and the
+// build scripts are intentionally excluded.
 const RUNTIME_FILES = [
   "background.js",
   "refresh-schedule.js",
-  "roster.js",
+  "vault.js",
+  "dvsa-centres.js",
   "dvsa-heuristics.js",
   "selectors.js",
   "watch-match.js",
@@ -49,7 +49,6 @@ function cleanManifest() {
   m.version = VERSION;
   m.host_permissions = noLocalhost(m.host_permissions);
   m.content_scripts = (m.content_scripts || [])
-    .filter((cs) => !(cs.js || []).includes("content.js")) // drop legacy telemetry
     .map((cs) => ({ ...cs, matches: noLocalhost(cs.matches) }))
     .filter((cs) => (cs.matches || []).length > 0);
   return m;
@@ -59,9 +58,9 @@ function build(target) {
   const outDir = path.join(dir, `${target}-build`);
   const manifest = cleanManifest();
 
-  // roster.js + refresh-schedule.js define globals (AvailoRoster, nextRefreshDelay)
+  // vault.js + refresh-schedule.js define globals (AvailoVault, nextRefreshDelay)
   // that background.js uses, so they must load first in the non-SW background.
-  const eventPageBg = { scripts: ["refresh-schedule.js", "roster.js", "background.js"] };
+  const eventPageBg = { scripts: ["refresh-schedule.js", "vault.js", "background.js"] };
 
   if (target === "firefox") {
     // Firefox (esp. Android): event-page background, not a service worker.

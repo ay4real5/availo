@@ -87,11 +87,10 @@ can book it faster. It does not book or reserve anything itself.
 **Permission justifications (paste per permission):**
 | Permission | Justification |
 |---|---|
-| `host_permissions: https://*.gov.uk/*` | Read the DVSA change-test results page the user is viewing (to spot earlier slots) and fill the login/search forms with the user's saved details. Runs only on gov.uk. |
+| `host_permissions: https://driverpracticaltest.dvsa.gov.uk/*` | Read the DVSA change-test results page the user is viewing (to spot earlier slots) and fill the login/search forms with the user's saved details. Runs only on the DVSA booking service. |
 | `storage` | Save the user's settings and their licence/booking reference locally on their own device. |
 | `notifications` | Show a desktop alert when an earlier slot appears or the user is signed out. |
 | `alarms` | Periodically re-check the page while watching, reliably in the background. |
-| `tabs` | Identify which tab is being watched so alerts point to the right place. |
 | `activeTab` | Act on the DVSA tab the user is currently using when they click the extension. |
 
 **Data-use disclosures (Chrome "Privacy practices" form):**
@@ -108,8 +107,7 @@ can book it faster. It does not book or reserve anything itself.
 1. Dev console → **New item** → upload `availo-chrome.zip`.
 2. Fill the listing with the copy above; add screenshots (≥1, 1280×800 or 640×400).
 3. Add the **privacy policy URL** and complete the **Privacy practices** form.
-4. Submit for review (usually a few days; the broad-ish gov.uk host permission may
-   draw a closer look — the justifications above are written for that).
+4. Submit for review (usually a few days).
 
 ## 5. Firefox AMO — submit — 🔴 YOU
 1. https://addons.mozilla.org/developers/ → **Submit a New Add-on** → upload

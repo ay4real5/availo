@@ -16,7 +16,7 @@ This is the **only** part of Availo that must be verified against the real DVSA 
 2. **Click the Availo icon** → **"Check this page"**.
    - Expected: "✓ Availo can read this page — it can see X available dates."
    - If it says it can't read the page, open the list of available tests and check again.
-3. **Click "Start watching this tab"** (single person) or **"Start watching everyone (in turn)"** (roster).
+3. **Click "Start watching this tab."**
 4. **Leave the tab active** for 5–10 minutes.
    - Expected: the page gently refreshes every 90+ seconds (you'll see the page reload briefly).
    - Expected: no CAPTCHA, no "unusual activity" warnings, no blocks.
@@ -26,7 +26,6 @@ This is the **only** part of Availo that must be verified against the real DVSA 
    - Pick a centre/date that already has an earlier slot than your current booking.
    - Expected: a single notification for the earliest matching slot, not a flood.
    - Expected: the matching row is highlighted on the page.
-   - Expected: the extension pauses so it doesn't cycle away from the slot.
 6. **Click "Book this test" yourself** on the highlighted slot and confirm/pay on DVSA as normal.
    - The extension never clicks this for you.
 7. **Stop watching** when done.
@@ -48,4 +47,4 @@ This is the **only** part of Availo that must be verified against the real DVSA 
 
 ## After the live test
 
-If everything passes, the roster mode is verified end-to-end. If anything fails, capture the page text, the popup state, and the service-worker console logs.
+If everything passes, Availo is verified end-to-end. If anything fails, capture the page text, the popup state, and the service-worker console logs.

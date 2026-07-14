@@ -1,8 +1,8 @@
 // Chrome: service worker → importScripts. Firefox (esp. Android) loads these as
 // event-page scripts listed in background.scripts (see build.mjs), so the globals
 // are already defined and importScripts doesn't exist — guard for both.
-// roster.js provides AvailoRoster; refresh-schedule.js provides nextRefreshDelay().
-if (typeof importScripts === "function") importScripts("refresh-schedule.js", "roster.js");
+// vault.js provides AvailoVault; refresh-schedule.js provides nextRefreshDelay().
+if (typeof importScripts === "function") importScripts("refresh-schedule.js", "vault.js");
 
 // Firefox Android may not support notifications/action badges. Stub them to no-ops
 // if absent so the six notify functions and their top-level listener registrations
@@ -26,26 +26,7 @@ if (!chrome.alarms) {
 
 const DEFAULT_BACKEND_URL = "https://availo-backend-4dbx.onrender.com";
 
-// Single key holding the roster rotation state (chrome.storage.session so it
-// survives MV3 service-worker suspension but resets when Chrome restarts).
-const ROTATION_KEY = "availoRotation";
-
-// -- legacy passive telemetry path (unchanged) --------------------------------
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === "SEND_METRICS") {
-    getBackendUrl().then((backendUrl) => {
-      fetch(`${backendUrl}/api/sessions/behaviour`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(message.payload),
-      })
-        .then((res) => res.json())
-        .then((data) => sendResponse({ ok: true, data }))
-        .catch((err) => sendResponse({ ok: false, error: err.message }));
-    });
-    return true; // keep channel open for async response
-  }
-
   handleWatchMessage(message, sender, sendResponse);
   return true;
 });
@@ -67,11 +48,9 @@ async function getBackendUrl() {
 }
 
 // The vault (licence/booking-ref/search) lives only in chrome.storage.local and
-// is never sent to the backend. It's derived from the currently ACTIVE roster
-// person, so Fast-Path fills whoever we're watching right now.
+// is never sent to the backend.
 async function getVault() {
-  const person = await AvailoRoster.getActivePerson();
-  return AvailoRoster.personToVault(person);
+  return AvailoVault.get();
 }
 
 // Auto-refresh setting (see options page). Default: on, conservative cadence.
@@ -112,123 +91,6 @@ async function isFastpathActive(tabId) {
   return Boolean(r[`fp_${tabId}`]);
 }
 
-// --- roster rotation state (storage.session-backed) ---
-// Only ONE person is ever signed in at a time. The rotation object tracks who
-// we're on, when to move to the next person, and whether a slot found for the
-// current person has paused the cycle so it stays put.
-//
-// Shape: { tabId, order:[personId], index, phase:"watching"|"cooldown"|"break",
-//          phaseUntil:ms, paused:bool }
-async function getRotation() {
-  const r = await chrome.storage.session.get(ROTATION_KEY);
-  return r[ROTATION_KEY] || null;
-}
-async function setRotation(state) {
-  if (state) await chrome.storage.session.set({ [ROTATION_KEY]: state });
-  else await chrome.storage.session.remove(ROTATION_KEY);
-}
-
-// Begin (or restart) watching the person at rotation.index: create a backend
-// watch session for them, prime Fast-Path to fill their details, and notify the
-// user to sign in as them. Returns the person, or null if the roster is empty.
-async function beginPersonWatch(rotation) {
-  const roster = await AvailoRoster.get();
-  const person = roster.find((p) => p.id === rotation.order[rotation.index]);
-  if (!person) return null;
-
-  await AvailoRoster.setActiveId(person.id);
-  const pacing = await AvailoRoster.getPacing();
-
-  // Fresh backend session for this person's primary centre. We alert only on
-  // slots EARLIER than their current test date (targetDate); empty = any slot.
-  const centre = (person.centres && person.centres[0]) || "unknown";
-  const targetDate = person.currentTestDate || null;
-  let session = null;
-  try {
-    const tab = await chrome.tabs.get(rotation.tabId);
-    session = await apiFetch("/api/watch/sessions", {
-      method: "POST",
-      body: {
-        centre,
-        person_name: person.name || null,
-        target_date: targetDate,
-        tab_url: tab.url || null,
-        extension_version: chrome.runtime.getManifest().version,
-      },
-    });
-  } catch { /* backend session is best-effort; local watch still runs */ }
-
-  await setWatch(rotation.tabId, {
-    sessionId: session?.id || null,
-    personId: person.id,
-    personName: person.name || null,
-    centre,
-    centres: person.centres || [],
-    targetDate,
-    nextRefreshAt: Date.now() + 90000,
-  });
-  detections.delete(rotation.tabId);
-
-  // Prime Fast-Path so the sign-in page auto-fills this person's details, and
-  // tell the content script the new watch target.
-  await chrome.tabs.sendMessage(rotation.tabId, {
-    type: "WATCH_START",
-    centre,
-    centres: person.centres || [],
-    targetDate,
-  }).catch(() => {});
-  await setFastpathActive(rotation.tabId, false); // passive fill only, user signs in
-
-  notifySwitchPerson(rotation.tabId, person, rotation.index, rotation.order.length, pacing.watchMinutes);
-  ensureWatchAlarm();
-  return person;
-}
-
-// Move the rotation forward one phase when its timer is up. Called from the
-// watch-tick alarm. Returns the (possibly updated) rotation.
-async function advanceRotation(rotation, now) {
-  const pacing = await AvailoRoster.getPacing();
-  // Pure decision (unit-tested in test/rotation.test.js); we run the side effects.
-  const d = AvailoRoster.nextPhase(rotation, now, pacing);
-  if (d.action === "none") return rotation;
-
-  const updated = { ...rotation, phase: d.phase, index: d.index, phaseUntil: d.phaseUntil };
-
-  if (d.action === "toCooldown") {
-    // Time's up for this person — end their watch and start a short cooldown.
-    await endCurrentWatch(updated.tabId);
-    notifyCooldown(updated.tabId);
-    await setRotation(updated);
-  } else if (d.action === "toBreak") {
-    // Full cycle complete — take a long break before looping.
-    notifyBreak(updated.tabId, pacing.breakMinutes);
-    await setRotation(updated);
-  } else if (d.action === "toWatching") {
-    // Start the next person (or loop back after a break).
-    await setRotation(updated);
-    await beginPersonWatch(updated);
-  }
-  return updated;
-}
-
-// End the active watch for a tab WITHOUT tearing down rotation state.
-async function endCurrentWatch(tabId) {
-  const watch = await getWatch(tabId);
-  await clearWatch(tabId);
-  detections.delete(tabId);
-  await chrome.tabs.sendMessage(tabId, { type: "WATCH_STOP" }).catch(() => {});
-  if (watch?.sessionId) {
-    try { await apiFetch(`/api/watch/sessions/${watch.sessionId}/stop`, { method: "POST" }); } catch { /* best-effort */ }
-  }
-}
-
-// Fully stop rotation and any active watch.
-async function stopRotation() {
-  const rotation = await getRotation();
-  if (rotation) await endCurrentWatch(rotation.tabId);
-  await setRotation(null);
-}
-
 async function apiFetch(path, { method = "GET", body } = {}) {
   const { backendUrl, token } = await getStored();
   if (!token) throw new Error("not_signed_in");
@@ -249,8 +111,6 @@ async function handleWatchMessage(message, sender, sendResponse) {
         const watch = await getWatch(message.tabId);
         const { token, email } = await getStored();
         const autoRefresh = await getAutoRefresh();
-        const rotation = await getRotation();
-        const roster = await AvailoRoster.get();
         sendResponse({
           ok: true,
           signedIn: Boolean(token),
@@ -259,72 +119,8 @@ async function handleWatchMessage(message, sender, sendResponse) {
           watch,
           detection: detections.get(message.tabId) || null,
           autoRefresh,
-          rotation: rotation && rotation.tabId === message.tabId ? summariseRotation(rotation, roster) : null,
-          rosterCount: roster.length,
-          rosterReady: roster.filter((p) => AvailoRoster.personReady(p)).length,
+          vaultReady: AvailoVault.ready(await AvailoVault.get()),
         });
-        break;
-      }
-
-      // -- Roster rotation --------------------------------------------------
-      case "START_ROTATION": {
-        const tabId = message.tabId;
-        const roster = await AvailoRoster.get();
-        const ready = roster.filter((p) => AvailoRoster.personReady(p));
-        if (ready.length === 0) { sendResponse({ ok: false, error: "no_people_ready" }); break; }
-
-        const pacing = await AvailoRoster.getPacing();
-        const rotation = {
-          tabId,
-          order: ready.map((p) => p.id),
-          index: 0,
-          phase: "watching",
-          phaseUntil: Date.now() + pacing.watchMinutes * 60 * 1000,
-          paused: false,
-        };
-        await setRotation(rotation);
-        await beginPersonWatch(rotation);
-        sendResponse({ ok: true, rotation: summariseRotation(rotation, roster) });
-        break;
-      }
-
-      case "STOP_ROTATION": {
-        await stopRotation();
-        sendResponse({ ok: true });
-        break;
-      }
-
-      case "PAUSE_ROTATION": {
-        const rotation = await getRotation();
-        if (rotation) { rotation.paused = true; await setRotation(rotation); }
-        sendResponse({ ok: true });
-        break;
-      }
-
-      case "RESUME_ROTATION": {
-        const rotation = await getRotation();
-        if (rotation) {
-          rotation.paused = false;
-          // Give the current person a fresh full window on resume.
-          const pacing = await AvailoRoster.getPacing();
-          if (rotation.phase === "watching") rotation.phaseUntil = Date.now() + pacing.watchMinutes * 60 * 1000;
-          await setRotation(rotation);
-        }
-        sendResponse({ ok: true });
-        break;
-      }
-
-      case "SKIP_PERSON": {
-        const rotation = await getRotation();
-        if (!rotation) { sendResponse({ ok: false, error: "not_rotating" }); break; }
-        // Jump straight into cooldown so the normal advance path moves us on.
-        rotation.paused = false;
-        rotation.phase = "cooldown";
-        rotation.phaseUntil = 0; // due immediately
-        await setRotation(rotation);
-        const advanced = await advanceRotation(rotation, Date.now());
-        const roster = await AvailoRoster.get();
-        sendResponse({ ok: true, rotation: summariseRotation(advanced, roster) });
         break;
       }
 
@@ -421,11 +217,6 @@ async function handleWatchMessage(message, sender, sendResponse) {
         const watch = await getWatch(tabId);
         if (!watch) { sendResponse({ ok: false, error: "not_watching" }); break; }
 
-        // A slot for the current person — freeze the rotation so we DON'T cycle
-        // away from them mid-booking. The user can resume/skip from the popup.
-        const rotation = await getRotation();
-        if (rotation && !rotation.paused) { rotation.paused = true; await setRotation(rotation); }
-
         let slotId = null;
         if (watch.sessionId) {
           try {
@@ -501,16 +292,10 @@ async function handleWatchMessage(message, sender, sendResponse) {
 
       case "QUEUED": {
         // DVSA/Queue-it waiting room. This is NOT a block — hold position and
-        // wait. Freeze the rotation timer so we don't cycle this person away
-        // while they're queuing, and let the user know they're in line.
+        // wait, and let the user know they're in line.
         const tabId = sender.tab?.id;
         const watch = await getWatch(tabId);
         if (!watch) { sendResponse({ ok: false, error: "not_watching" }); break; }
-        const rotation = await getRotation();
-        if (rotation && rotation.tabId === tabId && !rotation.paused) {
-          rotation.paused = true;
-          await setRotation(rotation);
-        }
         if (watch.sessionId) {
           try {
             await apiFetch("/api/watch/events", {
@@ -541,10 +326,7 @@ async function handleWatchMessage(message, sender, sendResponse) {
             });
           } catch { /* best-effort */ }
         }
-        // A block stops the whole rotation — we never try to push past DVSA's
-        // defences. Tell the user and stand down.
-        const rotation = await getRotation();
-        if (rotation && rotation.tabId === tabId) await setRotation(null);
+        // We never try to push past DVSA's defences. Tell the user and stand down.
         await clearWatch(tabId);
         detections.delete(tabId);
         notifyBlocked(tabId);
@@ -569,25 +351,6 @@ async function stopWatch(tabId) {
   try {
     await apiFetch(`/api/watch/sessions/${watch.sessionId}/stop`, { method: "POST" });
   } catch { /* best-effort — staleness check covers it */ }
-}
-
-// Compact rotation view for the popup: who's active, position, phase, and how
-// long is left in the current phase.
-function summariseRotation(rotation, roster) {
-  if (!rotation) return null;
-  const person = roster.find((p) => p.id === rotation.order[rotation.index]) || null;
-  const nextId = rotation.order[(rotation.index + 1) % rotation.order.length];
-  const next = roster.find((p) => p.id === nextId) || null;
-  return {
-    phase: rotation.phase,
-    paused: Boolean(rotation.paused),
-    index: rotation.index,
-    total: rotation.order.length,
-    personName: person?.name || "This person",
-    centre: (person?.centres && person.centres[0]) || null,
-    nextName: rotation.order.length > 1 ? (next?.name || "next person") : null,
-    secondsLeft: Math.max(0, Math.round((rotation.phaseUntil - Date.now()) / 1000)),
-  };
 }
 
 function notifyDetection(tabId, centre, slotDatetime, personName) {
@@ -621,49 +384,6 @@ function notifySignedOut(tabId, centre) {
   });
   chrome.action.setBadgeText({ tabId, text: "!" });
   chrome.action.setBadgeBackgroundColor({ tabId, color: "#c24e3a" });
-}
-
-// Roster rotation notifications ------------------------------------------------
-
-// It's this person's turn — the user needs to sign in as them.
-function notifySwitchPerson(tabId, person, index, total, watchMinutes) {
-  const name = person.name || "the next person";
-  chrome.notifications.create(`availo-switch-${tabId}-${Date.now()}`, {
-    type: "basic",
-    iconUrl: "icons/icon128.png",
-    title: total > 1 ? `Now watching ${name} (${index + 1} of ${total})` : `Now watching ${name}`,
-    message: `Sign in to DVSA as ${name} — their details are pre-filled. We'll watch for about ${watchMinutes} min, then it's the next person's turn.`,
-    priority: 2,
-    requireInteraction: true,
-  });
-  chrome.action.setBadgeText({ tabId, text: `${index + 1}` });
-  chrome.action.setBadgeBackgroundColor({ tabId, color: "#2f6f62" });
-}
-
-// Short pause between people so the same IP isn't logging in back-to-back.
-function notifyCooldown(tabId) {
-  chrome.notifications.create(`availo-cooldown-${tabId}-${Date.now()}`, {
-    type: "basic",
-    iconUrl: "icons/icon128.png",
-    title: "Switching to the next person",
-    message: "Please sign out of DVSA. We'll tell you who's next in a moment.",
-    priority: 1,
-  });
-  chrome.action.setBadgeText({ tabId, text: "…" });
-  chrome.action.setBadgeBackgroundColor({ tabId, color: "#67766c" });
-}
-
-// Full cycle done — take a long break before looping.
-function notifyBreak(tabId, breakMinutes) {
-  chrome.notifications.create(`availo-break-${tabId}-${Date.now()}`, {
-    type: "basic",
-    iconUrl: "icons/icon128.png",
-    title: "Taking a break",
-    message: `Everyone's had a turn. We'll rest for about ${breakMinutes} min so DVSA sees normal, human activity — then start again. You can sign out and step away.`,
-    priority: 1,
-  });
-  chrome.action.setBadgeText({ tabId, text: "z" });
-  chrome.action.setBadgeBackgroundColor({ tabId, color: "#67766c" });
 }
 
 // DVSA queue/waiting room — wait it out, don't stop.
@@ -726,11 +446,6 @@ function ensureWatchAlarm() {
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name !== "watch-tick") return;
   const now = Date.now();
-
-  // Advance the roster rotation first — its timer may end the current watch or
-  // start the next person before we do the per-tab heartbeat/refresh below.
-  const rotation = await getRotation();
-  if (rotation) await advanceRotation(rotation, now);
 
   const watches = await allWatches();
   if (watches.length === 0) return;

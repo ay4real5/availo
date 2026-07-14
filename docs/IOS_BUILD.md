@@ -106,9 +106,9 @@ extension resources.)
 4. Add an **app icon** (Assets catalog) — reuse the Availo mark.
 5. Give the **container app** a simple screen that tells the user how to enable it:
    *"Open Settings → Apps → Safari → Extensions → turn on Availo, and allow it on
-   gov.uk."* (The converter scaffolds a basic app view you can edit.)
-6. Confirm the extension's host permission is **`https://*.gov.uk/*`** only (it is,
-   from the build).
+   the DVSA booking site."* (The converter scaffolds a basic app view you can edit.)
+6. Confirm the extension's host permission is **`https://driverpracticaltest.dvsa.gov.uk/*`**
+   only (it is, from the build).
 
 ## 4. Run it
 - **Simulator:** pick an iPhone simulator, Run. In the simulator's Safari, enable the
@@ -138,5 +138,5 @@ extension resources.)
 When the extension changes, re-run `npm run build:safari` and refresh the extension
 resources in the Xcode project (re-run the converter or copy `safari-build/` in), bump
 the version, re-archive, and submit an update. All the shared logic (detection,
-autofill, roster, alerts) is identical to the Chrome/Firefox builds — only the
+autofill, watch, alerts) is identical to the Chrome/Firefox builds — only the
 packaging differs.
