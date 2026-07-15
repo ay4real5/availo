@@ -22,7 +22,10 @@ const startSchema = z.object({
   // for a few people from one laptop. It's just a display name (e.g. "Sarah") —
   // never a licence number or booking reference, which stay on the device.
   person_name: z.string().max(80).optional().nullable(),
-  target_date: z.string().datetime().optional().nullable(),
+  // { offset: true } because this is often a value read back from
+  // /api/auth/preferences, which Postgres/Supabase serialises with a "+00:00"
+  // offset rather than a "Z" suffix — the default validator rejects that.
+  target_date: z.string().datetime({ offset: true }).optional().nullable(),
   tab_url: z.string().optional().nullable(),
   extension_version: z.string().optional().nullable(),
 });

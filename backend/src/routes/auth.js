@@ -47,7 +47,9 @@ const loginSchema = z.object({
 
 const prefsSchema = z.object({
   centre: z.string().min(1),
-  current_test_date: z.string().datetime().optional().nullable(),
+  // { offset: true } so re-saving a value read back from GET /preferences
+  // (Postgres/Supabase returns "+00:00", not "Z") doesn't fail validation.
+  current_test_date: z.string().datetime({ offset: true }).optional().nullable(),
   search_days_ahead: z.number().int().min(1).max(180).default(42),
   notify_email: z.boolean().default(true),
   notify_sms: z.boolean().default(false),
