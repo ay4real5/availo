@@ -43,6 +43,28 @@ test("looksLikeBlock: recognises common block/challenge wording", () => {
   assert.equal(looksLikeBlock("Complete the CAPTCHA to continue"), true);
 });
 
+test("looksLikeBlock: recognises the real DVSA Imperva/hCaptcha challenge page", () => {
+  // Verbatim (trimmed) body text from an actual challenge encountered on
+  // driverpracticaltest.dvsa.gov.uk during live testing.
+  const real = `
+    driverpracticaltest.dvsa.gov.uk - Additional security check is required
+    I am human
+    Why am I seeing this page?
+    The website you are visiting is protected and accelerated by Imperva. Your
+    computer may have been infected by malware and therefore flagged by the
+    Imperva network. Imperva displays this page for you to verify that an
+    actual human is the source of the traffic to this site, and not
+    malicious software.
+    What should I do?
+    Just click the checkbox above to pass the security check. Imperva will
+    remember you and will not show this page again. We recommend you run a
+    virus and malware scan on your computer to remove any infection.
+    Note: Ad blocker extensions can interfere with the CAPTCHA challenge.
+    Powered by Imperva
+  `;
+  assert.equal(looksLikeBlock(real), true);
+});
+
 test("looksLikeBlock: normal results page is not a block", () => {
   assert.equal(looksLikeBlock("Available tests at Bolton — Monday 10 November 2026"), false);
   assert.equal(looksLikeBlock(""), false);

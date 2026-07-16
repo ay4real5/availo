@@ -73,9 +73,16 @@ function looksLikeBlock(text) {
     /unusual\s+activity/.test(t) ||
     /verify\s+(you\s+are|that\s+you'?re)\s+human/.test(t) ||
     /are\s+you\s+a\s+robot/.test(t) ||
-    /\bcaptcha\b/.test(t) ||
+    /\bh?captcha\b/.test(t) ||
     /access\s+denied/.test(t) ||
-    /you\s+have\s+been\s+blocked/.test(t)
+    /you\s+have\s+been\s+blocked/.test(t) ||
+    // Confirmed against the real Imperva/hCaptcha challenge DVSA can show
+    // ("driverpracticaltest.dvsa.gov.uk - Additional security check is
+    // required", "I am human", "Powered by Imperva").
+    /security\s+check\s+is\s+required/.test(t) ||
+    /additional\s+security\s+check/.test(t) ||
+    /\bimperva\b/.test(t) ||
+    /\bi\s+am\s+human\b/.test(t)
   );
 }
 
