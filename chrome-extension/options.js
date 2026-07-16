@@ -59,6 +59,30 @@ async function renderVault() {
   document.getElementById("vaultDateTo").value = v.dateTo;
 }
 
+// Sync just the centre + target date into the backend preferences (never the
+// licence/booking ref, which stay device-only) so "Start watching" knows what
+// counts as "earlier" without a separate dashboard trip. Best-effort: the vault
+// save above already succeeded and shouldn't be blocked by this.
+async function syncPreferences(centre, dateTo) {
+  if (!centre) return null;
+  const stored = await getStored();
+  if (!stored.token) return null;
+  try {
+    const res = await fetch(`${stored.backendUrl || DEFAULT_BACKEND_URL}/api/auth/preferences`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${stored.token}` },
+      body: JSON.stringify({
+        centre,
+        current_test_date: dateTo ? new Date(dateTo).toISOString() : null,
+      }),
+    });
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
 async function saveVault() {
   const saved = await AvailoVault.save({
     name: document.getElementById("vaultName").value,
@@ -70,8 +94,17 @@ async function saveVault() {
   });
   document.getElementById("vaultName").value = saved.name;
   document.getElementById("vaultLicence").value = saved.licence;
-  vaultStatusEl.textContent = "Saved. Your details stay on this device only.";
-  setTimeout(() => { vaultStatusEl.textContent = ""; }, 3000);
+
+  const prefs = await syncPreferences(saved.centre, saved.dateTo);
+  if (prefs) {
+    vaultStatusEl.textContent = prefs.current_test_date
+      ? `Saved — Availo will alert on anything earlier than ${new Date(prefs.current_test_date).toLocaleDateString()} at ${prefs.centre}.`
+      : `Saved — Availo will alert on the first available date at ${prefs.centre}.`;
+    await renderPrefsSummary(await getStored());
+  } else {
+    vaultStatusEl.textContent = "Saved. Your details stay on this device only.";
+  }
+  setTimeout(() => { vaultStatusEl.textContent = ""; }, 4000);
 }
 
 async function renderPrefsSummary(stored) {
