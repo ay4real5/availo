@@ -133,12 +133,23 @@ gaps it exposed. All committed + pushed to `origin/main`:
 
 ## What's left (all user-owned; nothing technically blocked)
 1. Set alert keys on **Render**: `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` (push) and
-   `RESEND_API_KEY`/`EMAIL_FROM` (email) so alerts actually send.
+   `RESEND_API_KEY`/`EMAIL_FROM` (email) so alerts actually send. **Do this first** — it
+   helps every user and unblocks the alerts test.
 2. Confirm auto-detection against **one real DVSA booking** — read-only "Check this
    page" only (never book as a test).
 3. A short **closed beta** (3–5 real learners), watching for account safety.
 4. **Publish:** Chrome Web Store + Firefox AMO (`docs/PUBLISHING.md`), iPhone App Store
    (`docs/IOS_BUILD.md`).
+
+## Roadmap (designed, not built)
+- **Multi-centre watching (2–3 nearby)** — per-tab, shared gentle refresh budget,
+  priority-weighted. Design captured in `docs/MULTI_CENTRE.md`. Do it AFTER alerts.
+
+## Recent efficiency pass (done, on `origin/main`)
+Commit `9d583bb`: don't reload out from under a live slot offer; centre-name
+normalization (`availoNormalizeCentre`, tolerates "Chorley (Euxton)"); debounced
+MutationObserver; visibility-aware gentler cadence (hidden tab → ×1.5 refresh gap). All
+in-bounds. Extension tests 54/54, backend 43/43, smoke 12/12.
 
 ## Pointers
 - See it work: `docs/TRY_IT.md`
@@ -146,6 +157,7 @@ gaps it exposed. All committed + pushed to `origin/main`:
 - Pre-launch test ladder: `docs/TESTING.md`
 - Publish (Chrome/Firefox): `docs/PUBLISHING.md`
 - iPhone build/submit: `docs/IOS_BUILD.md`
+- Multi-centre design: `docs/MULTI_CENTRE.md`
 - Architecture / deploy: `docs/ARCHITECTURE.md`, `DEPLOYMENT.md`, `render.yaml`
 
 ## Conventions
