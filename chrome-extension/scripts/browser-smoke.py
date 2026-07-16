@@ -80,6 +80,18 @@ def main():
         record("calendar-grid available dates found", len(calRows) == 2, f"dates={calRows}")
         record("earliest calendar date is 2026-11-04", bool(calRows) and min(calRows).startswith("2026-11-04"),
                f"earliest={min(calRows) if calRows else None}")
+        record("centre read from page header", cal.get("centre") == "Bolton", f"centre={cal.get('centre')}")
+        calMatch = page.evaluate(
+            """() => {
+                 const rows = AvailoResolve.resultRows(document).map(r => ({ centre: r.centre, datetime: r.datetime }));
+                 return {
+                   right: availoRankMatches(rows, { centre: 'Bolton', targetDate: null }).length,
+                   wrong: availoRankMatches(rows, { centre: 'Chorley', targetDate: null }).length,
+                 };
+               }"""
+        )
+        record("calendar dates match the right centre only",
+               calMatch.get("right") == 2 and calMatch.get("wrong") == 0, f"match={calMatch}")
 
         # 2) Login page — recognise it and find the fields Fast-Path fills.
         page.goto(f"http://localhost:{PORT}/login.html")

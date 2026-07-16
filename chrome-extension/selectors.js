@@ -141,6 +141,7 @@ const AvailoResolve = (() => {
   // target date.
   function calendarAvailableDates(doc = document) {
     const cells = [...doc.querySelectorAll(".BookingCalendar-date--bookable")];
+    const centre = pageCentre(doc);
     const rows = [];
     for (const cell of cells) {
       const link = cell.querySelector("a[data-date]") || (cell.matches && cell.matches("a[data-date]") ? cell : null);
@@ -149,9 +150,25 @@ const AvailoResolve = (() => {
       if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) continue;
       const d = new Date(`${dateStr}T00:00:00.000Z`);
       if (Number.isNaN(d.getTime())) continue;
-      rows.push({ el: cell, datetime: d.toISOString(), centre: null, selectEl: link });
+      // Attribute the date to the centre the REAL calendar page is actually for
+      // (read from the page header), not to whatever the user happens to have
+      // saved. Otherwise watching the Ayr page with "Chorley" saved would report
+      // Ayr dates as Chorley matches. If we can't read a centre, fall back to
+      // null and let the caller's prefs-centre fallback apply (keeps the fixture
+      // and any non-header layout working as before).
+      rows.push({ el: cell, datetime: d.toISOString(), centre: centre || null, selectEl: link });
     }
     return rows;
+  }
+
+  // The centre a real DVSA booking page is for, read from its header
+  // (<div id="chosen-test-centre"><h1>Ayr</h1><a>Change</a></div>). Confirmed
+  // against the live site's markup. Returns null if not present (e.g. the
+  // practice fixture / any page without this header).
+  function pageCentre(doc = document) {
+    const h = doc.querySelector("#chosen-test-centre h1");
+    const text = h && (h.textContent || "").trim();
+    return text || null;
   }
 
   function page(doc = document) {
@@ -195,10 +212,11 @@ const AvailoResolve = (() => {
       login: { licence: !!login.licence, bookingRef: !!login.bookingRef, submit: !!login.submit },
       search: { centre: !!search.centre, dateFrom: !!search.dateFrom, submit: !!search.submit },
       rowCount: rows.length,
+      centre: pageCentre(doc),
     };
   }
 
-  return { page, loginFields, searchFields, resultRows, blocked, queued, loggedOut, diagnose };
+  return { page, loginFields, searchFields, resultRows, blocked, queued, loggedOut, diagnose, pageCentre };
 })();
 
 if (typeof module !== "undefined" && module.exports) {
