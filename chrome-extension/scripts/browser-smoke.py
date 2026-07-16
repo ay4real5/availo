@@ -68,6 +68,19 @@ def main():
         record("earliest Bolton slot picked", bool(best) and best["datetime"].startswith("2026-11-10"),
                f"earliest={best and best['datetime']}")
 
+        # 1b) Real DVSA calendar-grid layout (Test date/Test time pages) — a
+        # structurally different page to results.html's row list. Confirmed
+        # against the real site's markup during live testing.
+        page.goto(f"http://localhost:{PORT}/calendar.html")
+        inject_engine(page)
+        cal = page.evaluate("() => AvailoResolve.diagnose(document)")
+        calRows = page.evaluate("() => AvailoResolve.resultRows(document).map(r => r.datetime)")
+        page.screenshot(path=str(OUT / "1b-calendar.png"))
+        record("calendar-grid page recognised", cal.get("page") == "results", f"page={cal.get('page')}")
+        record("calendar-grid available dates found", len(calRows) == 2, f"dates={calRows}")
+        record("earliest calendar date is 2026-11-04", bool(calRows) and min(calRows).startswith("2026-11-04"),
+               f"earliest={min(calRows) if calRows else None}")
+
         # 2) Login page — recognise it and find the fields Fast-Path fills.
         page.goto(f"http://localhost:{PORT}/login.html")
         inject_engine(page)

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Test time (practice)</title>
+<style>
+  body { font-family: "GDS Transport", arial, sans-serif; max-width: 640px; margin: 40px auto; color: #0b0c0c; padding: 0 16px; }
+  h1 { font-size: 1.5rem; }
+  table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+  td { text-align: center; padding: 10px; border: 1px solid #b1b4b6; }
+  .BookingCalendar-date--unavailable { background: repeating-linear-gradient(45deg, #f3f2f1, #f3f2f1 4px, #fff 4px, #fff 8px); color: #b1b4b6; }
+  .BookingCalendar-date--available { background: #fff; }
+  .BookingCalendar-dateLink { display: block; color: #0b0c0c; text-decoration: none; }
+  .practice { background: #fbf0dd; border: 1px solid #e0932a; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 20px; }
+  /* Deliberately reproduces the REAL DVSA "Test time" calendar markup
+     (BookingCalendar-date--available/--unavailable cells, a data-date link)
+     rather than the row/table shape used by results.html — this is what
+     selectors.js's calendarAvailableDates() is exercised against. No testid
+     shortcuts: the heuristic itself is what's under test. */
+</style>
+</head>
+<body>
+  <div class="practice">🛟 <strong>Practice mode.</strong> This page mimics the real DVSA calendar layout (not the simple list on the other practice page) so Availo's calendar-reading logic can be rehearsed too.</div>
+  <h1>Test time - Bolton</h1>
+  <table>
+    <thead><tr><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th><th>Sun</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="BookingCalendar-date--unavailable"><div class="BookingCalendar-content"><a class="BookingCalendar-dateLink" data-date="2026-11-02" href="#date-2026-11-02">2</a></div></td>
+        <td class="BookingCalendar-date--unavailable"><div class="BookingCalendar-content"><a class="BookingCalendar-dateLink" data-date="2026-11-03" href="#date-2026-11-03">3</a></div></td>
+        <td class="BookingCalendar-date--available"><div class="BookingCalendar-content"><a class="BookingCalendar-dateLink" data-date="2026-11-04" href="#date-2026-11-04">4</a></div></td>
+        <td class="BookingCalendar-date--unavailable"><div class="BookingCalendar-content"><a class="BookingCalendar-dateLink" data-date="2026-11-05" href="#date-2026-11-05">5</a></div></td>
+        <td class="BookingCalendar-date--unavailable"><div class="BookingCalendar-content"><a class="BookingCalendar-dateLink" data-date="2026-11-06" href="#date-2026-11-06">6</a></div></td>
+        <td class="BookingCalendar-date--available"><div class="BookingCalendar-content"><a class="BookingCalendar-dateLink" data-date="2026-11-07" href="#date-2026-11-07">7</a></div></td>
+        <td class="BookingCalendar-date--unavailable"><div class="BookingCalendar-content"><a class="BookingCalendar-dateLink" data-date="2026-11-08" href="#date-2026-11-08">8</a></div></td>
+      </tr>
+    </tbody>
+  </table>
+  <p><span style="display:inline-block;width:12px;height:12px;background:#fff;border:1px solid #b1b4b6;"></span> Available
+     &nbsp; <span style="display:inline-block;width:12px;height:12px;background:repeating-linear-gradient(45deg,#f3f2f1,#f3f2f1 2px,#fff 2px,#fff 4px);border:1px solid #b1b4b6;"></span> Unavailable</p>
+</body>
+</html>
