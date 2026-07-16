@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert");
-const { availoMatchesTarget, availoPickSoonestUnalerted } = require("../watch-match.js");
+const { availoMatchesTarget, availoPickSoonestUnalerted, availoNormalizeCentre } = require("../watch-match.js");
 
 test("matches when centre and date both qualify", () => {
   const ok = availoMatchesTarget(
@@ -16,6 +16,29 @@ test("centre match is case/whitespace insensitive", () => {
     { centre: "Bolton", targetDate: "2026-12-01T09:00:00.000Z" },
   );
   assert.equal(ok, true);
+});
+
+test("centre match tolerates a trailing parenthetical qualifier", () => {
+  // Live DVSA header says "Chorley (Euxton)"; the user saved "Chorley".
+  const ok = availoMatchesTarget(
+    { centre: "Chorley (Euxton)", datetime: "2026-11-01T10:00:00.000Z" },
+    { centre: "Chorley", targetDate: "2026-12-01T09:00:00.000Z" },
+  );
+  assert.equal(ok, true);
+});
+
+test("centre match tolerates punctuation and double spaces", () => {
+  const ok = availoMatchesTarget(
+    { centre: "Wood Green  (London)", datetime: "2026-11-01T10:00:00.000Z" },
+    { centre: "Wood Green", targetDate: "2026-12-01T09:00:00.000Z" },
+  );
+  assert.equal(ok, true);
+});
+
+test("normalizeCentre keeps genuinely different centres distinct", () => {
+  assert.notEqual(availoNormalizeCentre("Bolton"), availoNormalizeCentre("Bury"));
+  assert.equal(availoNormalizeCentre("  Chorley (Euxton) "), "chorley");
+  assert.equal(availoNormalizeCentre("Wood Green, London"), "wood green london");
 });
 
 test("rejects a different centre", () => {

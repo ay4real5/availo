@@ -11,6 +11,8 @@
   // the real DVSA GOV.UK markup — loaded before this file in manifest.json.
 
   const RESCAN_INTERVAL_MS = 4000;
+  const SCAN_DEBOUNCE_MS = 300;       // coalesce bursts of DOM mutations into one scan
+  const OFFER_REFRESH_HOLD_MS = 180000; // don't auto-reload out from under a live offer (cap 3 min)
   const BANNER_ID = "availo-watch-banner";
   const HIGHLIGHT_CLASS = "availo-slot-highlight";
 
@@ -18,13 +20,25 @@
   let prefs = null; // { centre, targetDate }
   let observer = null;
   let rescanTimer = null;
+  let scanDebounceTimer = null;
   let alertedKeys = new Set();
   let activeSelectElement = null;
   let activeSlotInfo = null; // { datetime, centre }
+  let offerActiveSince = 0;  // ms timestamp the current slot was offered/revealed
   let loggedOutReported = false;
   let queuedReported = false;
 
   ensureHighlightStyle();
+
+  // Tell the background when this tab becomes hidden/visible so it can ease the
+  // refresh cadence while nobody's looking (fewer requests, gentler on DVSA).
+  function reportVisibility() {
+    if (!watching) return;
+    try {
+      chrome.runtime.sendMessage({ type: "VISIBILITY", hidden: document.hidden }).catch(() => {});
+    } catch { /* background asleep / context gone; next change re-reports */ }
+  }
+  document.addEventListener("visibilitychange", reportVisibility);
 
   // Fresh scan of the live DOM → ranked, still-present matching rows (earliest
   // first). Everything reads current reality, never a stale cached row — that's
@@ -101,10 +115,21 @@
     }
   }
 
+  // True while a detected slot is still on the page and recent enough that the
+  // user may be acting on it — used to hold off an auto-refresh that would reload
+  // the page out from under them (and reset the scroll/highlight). Self-clears
+  // once the slot leaves the DOM or the cap elapses, so watching never freezes.
+  function offerHoldActive() {
+    if (!activeSlotInfo || !offerActiveSince) return false;
+    if (Date.now() - offerActiveSince > OFFER_REFRESH_HOLD_MS) return false;
+    return !!findSlotRow(activeSlotInfo.centre, activeSlotInfo.datetime);
+  }
+
   function offerSlot(rowInfo, { count = 1 } = {}) {
     alertedKeys.add(`${rowInfo.centre}|${rowInfo.datetime}`);
     activeSelectElement = rowInfo.selectEl || rowInfo.el;
     activeSlotInfo = { centre: rowInfo.centre, datetime: rowInfo.datetime };
+    offerActiveSince = Date.now();
 
     chrome.runtime.sendMessage({
       type: "SLOT_DETECTED",
@@ -174,10 +199,13 @@
   function revealSlot() {
     if (!activeSlotInfo) return;
 
-    let target = findSlotRow(activeSlotInfo.centre, activeSlotInfo.datetime);
+    // One scan of current reality, reused for both the exact match and the
+    // next-best fallback (avoids scanning the DOM twice).
+    const ranked = currentRankedRows();
+    let target = ranked.find((r) => r.centre === activeSlotInfo.centre && r.datetime === activeSlotInfo.datetime) || null;
     let replaced = false;
     if (!target) {
-      target = currentRankedRows()[0] || null; // next-best still present
+      target = ranked[0] || null; // next-best still present
       replaced = true;
     }
 
@@ -191,6 +219,7 @@
 
     activeSlotInfo = { centre: target.centre, datetime: target.datetime };
     activeSelectElement = target.selectEl || target.el;
+    offerActiveSince = Date.now();
     alertedKeys.add(`${target.centre}|${target.datetime}`);
 
     chrome.runtime.sendMessage({
@@ -237,6 +266,17 @@
     document.body.appendChild(banner);
   }
 
+  // Coalesce a burst of DOM mutations into a single scan shortly after they
+  // settle, instead of scanning on every mutation. Cuts redundant work on a busy
+  // page; the 4s safety timer still guarantees a scan even if mutations stop.
+  function scheduleScan() {
+    if (scanDebounceTimer) return;
+    scanDebounceTimer = setTimeout(() => {
+      scanDebounceTimer = null;
+      scanForSlots();
+    }, SCAN_DEBOUNCE_MS);
+  }
+
   // Run a DOM write with the MutationObserver detached, so Availo's own banner /
   // highlight edits don't retrigger scanForSlots (which caused a detection loop).
   function withObserverPaused(fn) {
@@ -252,18 +292,21 @@
     // Guard against double-init (initial WATCH_START vs a resume after reload).
     if (observer) observer.disconnect();
     if (rescanTimer) clearInterval(rescanTimer);
+    if (scanDebounceTimer) { clearTimeout(scanDebounceTimer); scanDebounceTimer = null; }
 
     watching = true;
     prefs = newPrefs;
     alertedKeys = new Set();
     activeSelectElement = null;
     activeSlotInfo = null;
+    offerActiveSince = 0;
     loggedOutReported = false;
     queuedReported = false;
 
-    observer = new MutationObserver(() => scanForSlots());
+    observer = new MutationObserver(scheduleScan);
     observer.observe(document.body, { childList: true, subtree: true });
     rescanTimer = setInterval(scanForSlots, RESCAN_INTERVAL_MS);
+    reportVisibility(); // seed the background with the current hidden/visible state
     scanForSlots();
   }
 
@@ -286,8 +329,10 @@
     prefs = null;
     activeSelectElement = null;
     activeSlotInfo = null;
+    offerActiveSince = 0;
     if (observer) { observer.disconnect(); observer = null; }
     if (rescanTimer) { clearInterval(rescanTimer); rescanTimer = null; }
+    if (scanDebounceTimer) { clearTimeout(scanDebounceTimer); scanDebounceTimer = null; }
     removeBanner();
   }
 
@@ -314,6 +359,10 @@
       // Never refresh while queuing — a reload sends you to the back of the line.
       if (AvailoResolve.queued(document)) return;
       if (AvailoResolve.page(document) !== "results") return;
+      // Don't reload the page out from under a slot the user is actively acting
+      // on — it would reset the scroll/highlight mid-click. Self-clears once the
+      // slot is gone or the hold cap elapses, so watching resumes on its own.
+      if (offerHoldActive()) return;
       window.location.reload();
     } else if (message.type === "DIAGNOSE") {
       // The popup's "Check this page" self-test — report what we can read.

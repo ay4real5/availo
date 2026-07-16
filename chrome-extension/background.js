@@ -290,6 +290,16 @@ async function handleWatchMessage(message, sender, sendResponse) {
         break;
       }
 
+      case "VISIBILITY": {
+        // The watched tab reports whether it's currently hidden, so the refresh
+        // cadence can ease off while nobody's looking (see the alarm handler).
+        const tabId = sender.tab?.id;
+        const watch = await getWatch(tabId);
+        if (watch) await setWatch(tabId, { ...watch, hidden: Boolean(message.hidden) });
+        sendResponse({ ok: true });
+        break;
+      }
+
       case "QUEUED": {
         // DVSA/Queue-it waiting room. This is NOT a block — hold position and
         // wait, and let the user know they're in line.
@@ -464,7 +474,12 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     // content script refuses to refresh into a block. Otherwise just re-scan.
     if (autoRefreshOn && watch.nextRefreshAt && now >= watch.nextRefreshAt) {
       await chrome.tabs.sendMessage(watch.tabId, { type: "REFRESH_PAGE" }).catch(() => {});
-      const delay = nextRefreshDelay(baseSeconds * 1000, 30000);
+      // Ease off while the tab is hidden: stretch the gap to cut total requests
+      // (fewer CAPTCHA triggers) during long unattended stretches. This is load
+      // reduction — NOT pattern-hiding — and the content script still refuses to
+      // refresh into a block regardless.
+      const hiddenMultiplier = watch.hidden ? 1.5 : 1;
+      const delay = nextRefreshDelay(baseSeconds * 1000 * hiddenMultiplier, 30000);
       await setWatch(watch.tabId, { ...watch, nextRefreshAt: now + delay });
     } else {
       await chrome.tabs.sendMessage(watch.tabId, { type: "RESCAN" }).catch(() => {});

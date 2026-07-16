@@ -2,10 +2,26 @@
 // be unit tested headlessly (see chrome-extension/test/watch-match.test.js)
 // without needing a browser. Loaded as a plain script before watch-content.js
 // in manifest.json, so it also runs fine as a page-context global.
+
+// Canonicalise a test-centre name so a slightly different spelling on the live
+// DVSA page (from `#chosen-test-centre h1`) still matches the centre the user
+// saved from the autocomplete. Lowercase, collapse inner whitespace, drop a
+// trailing parenthetical qualifier (e.g. "Chorley (Euxton)" -> "chorley"), and
+// strip stray punctuation. Deliberately conservative: it only removes noise, so
+// two genuinely different centres never collapse to the same string.
+function availoNormalizeCentre(name) {
+  return String(name || "")
+    .toLowerCase()
+    .replace(/\(.*?\)/g, " ")   // drop "(Euxton)"-style qualifiers
+    .replace(/[.,]/g, " ")       // stray punctuation -> space
+    .replace(/\s+/g, " ")        // collapse whitespace
+    .trim();
+}
+
 function availoMatchesTarget(slot, prefs) {
   if (!slot || !prefs) return false;
   if (!slot.centre || !prefs.centre) return false;
-  if (slot.centre.trim().toLowerCase() !== prefs.centre.trim().toLowerCase()) return false;
+  if (availoNormalizeCentre(slot.centre) !== availoNormalizeCentre(prefs.centre)) return false;
   if (!prefs.targetDate) return true;
   const slotTime = new Date(slot.datetime).getTime();
   const targetTime = new Date(prefs.targetDate).getTime();
@@ -26,5 +42,5 @@ function availoPickSoonestUnalerted(rankedSlots, alertedKeys) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { availoMatchesTarget, availoPickSoonestUnalerted };
+  module.exports = { availoMatchesTarget, availoPickSoonestUnalerted, availoNormalizeCentre };
 }
