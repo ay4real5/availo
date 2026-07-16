@@ -128,17 +128,19 @@ const AvailoResolve = (() => {
 
   // The REAL DVSA "change your driving test" / "book your driving test" pages
   // (driverpracticaltest.dvsa.gov.uk) render a month calendar, not a row list —
-  // structurally different from the fixture's table. Each day is a
-  // <td class="BookingCalendar-date--available"> containing
+  // structurally different from the fixture's table. Each bookable day is a
+  // <td class="BookingCalendar-date--bookable"> (optionally also "is-active"
+  // when it's the selected day) containing
   // <a class="BookingCalendar-dateLink" data-date="2026-08-01">. Confirmed
-  // against the real site's markup (unavailable-day variant seen directly;
-  // "available" inferred from the page's own Available/Unavailable legend —
-  // GOV.UK's BEM-style state-class pairing). No per-day time is exposed here —
-  // that only appears in a separate "Choose a time" panel after a date is
-  // picked — so these rows carry midnight UTC for the date only; still enough
-  // to tell whether a day is earlier than the target date.
+  // directly against the real site's markup via DevTools for both the
+  // unavailable AND bookable variants — note the class says "bookable", not
+  // "available", even though the page's own legend label reads "Available".
+  // No per-day time is exposed here — that only appears in a separate "Choose
+  // a time" panel after a date is picked — so these rows carry midnight UTC
+  // for the date only; still enough to tell whether a day is earlier than the
+  // target date.
   function calendarAvailableDates(doc = document) {
-    const cells = [...doc.querySelectorAll(".BookingCalendar-date--available")];
+    const cells = [...doc.querySelectorAll(".BookingCalendar-date--bookable")];
     const rows = [];
     for (const cell of cells) {
       const link = cell.querySelector("a[data-date]") || (cell.matches && cell.matches("a[data-date]") ? cell : null);
