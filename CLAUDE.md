@@ -132,9 +132,11 @@ gaps it exposed. All committed + pushed to `origin/main`:
   account ($99/yr)** to sign + submit to the App Store (`docs/IOS_BUILD.md`).
 
 ## What's left (all user-owned; nothing technically blocked)
-1. Set alert keys on **Render**: `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` (push) and
-   `RESEND_API_KEY`/`EMAIL_FROM` (email) so alerts actually send. **Do this first** — it
-   helps every user and unblocks the alerts test.
+1. **Alerts:** ✅ **Phone push is ON** — `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` set on
+   Render's `availo-backend` service (verified 16 Jul: `/api/watch/push/key` serves the
+   key). ⏳ **Email still pending:** set `RESEND_API_KEY`/`EMAIL_FROM` (needs a verified
+   Resend domain). NOTE: Render env vars must be on the **service** (or a *linked* env
+   group), not a standalone Environment Group.
 2. Confirm auto-detection against **one real DVSA booking** — read-only "Check this
    page" only (never book as a test).
 3. A short **closed beta** (3–5 real learners), watching for account safety.
