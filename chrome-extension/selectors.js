@@ -25,6 +25,8 @@ const AvailoResolve = (() => {
         looksLikeBlock: (t) => (typeof looksLikeBlock === "function" ? looksLikeBlock(t) : false),
         looksLikeQueue: (t) => (typeof looksLikeQueue === "function" ? looksLikeQueue(t) : false),
         looksLoggedOut: (t) => (typeof looksLoggedOut === "function" ? looksLoggedOut(t) : false),
+        looksLikeServiceClosed: (t) => (typeof looksLikeServiceClosed === "function" ? looksLikeServiceClosed(t) : false),
+        parseReopenTime: (t) => (typeof parseReopenTime === "function" ? parseReopenTime(t) : null),
         labelMatchesKind: (t, k) => (typeof labelMatchesKind === "function" ? labelMatchesKind(t, k) : false),
         buttonMatchesAction: (t, a) => (typeof buttonMatchesAction === "function" ? buttonMatchesAction(t, a) : false),
       };
@@ -86,6 +88,18 @@ const AvailoResolve = (() => {
   function queued(doc = document) {
     if (testid(doc, "availo-queue")) return true;
     return H.looksLikeQueue(bodyText(doc));
+  }
+
+  // DVSA's scheduled overnight closure ("back at 6 am"). Distinct from blocked():
+  // pause + gently re-check until it reopens, don't stand down for good.
+  function serviceClosed(doc = document) {
+    if (testid(doc, "availo-service-closed")) return true;
+    return H.looksLikeServiceClosed(bodyText(doc));
+  }
+
+  // The stated reopening time from the closure page, e.g. "6 am", or null.
+  function reopenTime(doc = document) {
+    return H.parseReopenTime(bodyText(doc));
   }
 
   // Has DVSA signed the user out? True on the sign-in page or a session-expired
@@ -230,7 +244,7 @@ const AvailoResolve = (() => {
     };
   }
 
-  return { page, loginFields, searchFields, resultRows, blocked, queued, loggedOut, diagnose, pageCentre };
+  return { page, loginFields, searchFields, resultRows, blocked, queued, loggedOut, serviceClosed, reopenTime, diagnose, pageCentre };
 })();
 
 if (typeof module !== "undefined" && module.exports) {

@@ -329,6 +329,20 @@ async function handleWatchMessage(message, sender, sendResponse) {
         break;
       }
 
+      case "SERVICE_CLOSED": {
+        // DVSA's overnight closure. Notify once on the transition into closed,
+        // and flag the watch so the alarm re-checks slowly (not every 90s) until
+        // it reopens, then resumes normally.
+        const tabId = sender.tab?.id;
+        const watch = await getWatch(tabId);
+        if (watch) {
+          if (message.closed && !watch.closed) notifyServiceClosed(tabId, message.reopen);
+          await setWatch(tabId, { ...watch, closed: Boolean(message.closed) });
+        }
+        sendResponse({ ok: true });
+        break;
+      }
+
       case "QUEUED": {
         // DVSA/Queue-it waiting room. This is NOT a block — hold position and
         // wait, and let the user know they're in line.
@@ -455,6 +469,19 @@ function notifyQueued(tabId, personName) {
   chrome.action.setBadgeBackgroundColor({ tabId, color: "#e0932a" });
 }
 
+// DVSA's scheduled overnight closure — pause, don't stand down.
+function notifyServiceClosed(tabId, reopen) {
+  chrome.notifications.create(`availo-closed-${tabId}-${Date.now()}`, {
+    type: "basic",
+    iconUrl: "icons/icon128.png",
+    title: "DVSA is closed for the night",
+    message: `The booking service is down${reopen ? ` until ${reopen}` : " overnight"}. Availo has paused and will resume automatically when it reopens.`,
+    priority: 1,
+  });
+  chrome.action.setBadgeText({ tabId, text: "z" });
+  chrome.action.setBadgeBackgroundColor({ tabId, color: "#67766c" });
+}
+
 // DVSA challenge/block — stand down completely.
 function notifyBlocked(tabId) {
   chrome.notifications.create(`availo-blocked-${tabId}-${Date.now()}`, {
@@ -558,6 +585,10 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     ordered[0];
 
   await chrome.tabs.sendMessage(pick.tabId, { type: "REFRESH_PAGE" }).catch(() => {});
-  await setSharedRefresh({ nextAt: now + delay, lastTabId: pick.tabId });
+  // If the picked tab is on DVSA's overnight-closed page, re-check gently (every
+  // ~5 min) rather than every 90s — just often enough to catch the reopening.
+  const CLOSED_RECHECK_MS = 5 * 60 * 1000;
+  const nextDelay = pick.closed ? Math.max(delay, CLOSED_RECHECK_MS) : delay;
+  await setSharedRefresh({ nextAt: now + nextDelay, lastTabId: pick.tabId });
   await rescanExcept(pick.tabId);
 });

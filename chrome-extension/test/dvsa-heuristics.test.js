@@ -1,8 +1,26 @@
 const test = require("node:test");
 const assert = require("node:assert");
 const {
-  parseSlotDateTime, looksLikeBlock, looksLikeQueue, looksLoggedOut, labelMatchesKind, buttonMatchesAction,
+  parseSlotDateTime, looksLikeBlock, looksLikeQueue, looksLoggedOut, looksLikeServiceClosed, parseReopenTime, labelMatchesKind, buttonMatchesAction,
 } = require("../dvsa-heuristics.js");
+
+test("looksLikeServiceClosed: recognises DVSA's overnight closure page", () => {
+  // Verbatim from the real page.
+  assert.equal(looksLikeServiceClosed("Sorry, you can't use this service right now. It'll be back at 6 am"), true);
+  assert.equal(looksLikeServiceClosed("Service unavailable"), true);
+  assert.equal(looksLikeServiceClosed("The service is currently closed"), true);
+});
+
+test("looksLikeServiceClosed: a normal results/calendar page is not a closure", () => {
+  assert.equal(looksLikeServiceClosed("Available tests at Sunderland — July 2026"), false);
+  assert.equal(looksLikeServiceClosed(""), false);
+});
+
+test("parseReopenTime: pulls the reopening time out of the closure page", () => {
+  assert.equal(parseReopenTime("It'll be back at 6 am"), "6 am");
+  assert.equal(parseReopenTime("It'll be back at 6:30am"), "6:30am");
+  assert.equal(parseReopenTime("Available tests at Bolton"), null);
+});
 
 test("parseSlotDateTime: full GOV.UK wording with am time", () => {
   assert.equal(parseSlotDateTime("Monday 10 November 2026 9:15am"), "2026-11-10T09:15:00.000Z");

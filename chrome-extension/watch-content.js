@@ -27,6 +27,7 @@
   let offerActiveSince = 0;  // ms timestamp the current slot was offered/revealed
   let loggedOutReported = false;
   let queuedReported = false;
+  let serviceClosedState = false; // DVSA's overnight closure, tracked for transitions
 
   ensureHighlightStyle();
 
@@ -75,6 +76,23 @@
       stopWatchingLocally();
       return;
     }
+
+    // DVSA's scheduled overnight closure ("back at 6 am"). NOT a block — pause
+    // slot-scanning and keep watching so we auto-resume when it reopens (the
+    // gentle re-check is allowed in the REFRESH_PAGE handler). Report the
+    // transition (both ways) so the background can notify + slow the cadence.
+    const closedNow = AvailoResolve.serviceClosed(document);
+    if (closedNow !== serviceClosedState) {
+      serviceClosedState = closedNow;
+      chrome.runtime.sendMessage({ type: "SERVICE_CLOSED", closed: closedNow, reopen: closedNow ? AvailoResolve.reopenTime(document) : null });
+      if (closedNow) {
+        const when = AvailoResolve.reopenTime(document);
+        infoBanner(`<strong>DVSA is closed for the night.</strong><br>The booking service is down${when ? ` until ${when}` : " overnight"}. Availo has paused and will resume automatically when it reopens.`);
+      } else {
+        removeBanner();
+      }
+    }
+    if (closedNow) return;
 
     // In a DVSA queue / waiting room? This is NOT a block — hold position and
     // wait. Never refresh (that loses your place). Alert once; keep watching so
@@ -378,6 +396,10 @@
       }
       // Never refresh while queuing — a reload sends you to the back of the line.
       if (AvailoResolve.queued(document)) return;
+      // During DVSA's overnight closure the page isn't "results", but we DO want
+      // to reload it (gently, paced by the background) so we notice the moment it
+      // reopens and can resume — a prime time for fresh slots.
+      if (AvailoResolve.serviceClosed(document)) { window.location.reload(); return; }
       if (AvailoResolve.page(document) !== "results") return;
       // Don't reload the page out from under a slot the user is actively acting
       // on — it would reset the scroll/highlight mid-click. Self-clears once the

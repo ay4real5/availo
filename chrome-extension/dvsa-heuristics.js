@@ -86,6 +86,32 @@ function looksLikeBlock(text) {
   );
 }
 
+// Does this page read like DVSA's scheduled overnight closure? The booking
+// service shuts down overnight and shows "Sorry, you can't use this service
+// right now / It'll be back at 6 am". This is NOT a block or an error — the
+// right behaviour is to pause slot-scanning and gently re-check until it
+// reopens (a prime time for fresh slots), then resume. Detecting the page
+// itself (rather than hardcoding hours) means it still works if DVSA changes
+// its schedule or does extra maintenance.
+function looksLikeServiceClosed(text) {
+  if (!text || typeof text !== "string") return false;
+  const t = text.toLowerCase();
+  return (
+    /you\s+can['’]?t\s+use\s+this\s+service\s+right\s+now/.test(t) ||
+    /it['’]?ll\s+be\s+back\s+at\s+\d/.test(t) ||
+    /\bservice\s+unavailable\b/.test(t) ||
+    /the\s+service\s+is\s+(?:currently\s+)?(?:closed|unavailable)/.test(t)
+  );
+}
+
+// Pull DVSA's stated reopening time out of "It'll be back at 6 am" so we can
+// tell the user when, and time the resume. Returns e.g. "6 am", or null.
+function parseReopenTime(text) {
+  if (!text || typeof text !== "string") return null;
+  const m = text.match(/back\s+at\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm))/i);
+  return m ? m[1].replace(/\s+/g, " ").trim() : null;
+}
+
 // Does this page read like a DVSA/Queue-it waiting room? A queue is NOT a block:
 // the correct behaviour is to WAIT quietly (never refresh — that loses your
 // place), not to stop watching. Kept separate from looksLikeBlock for that
@@ -153,5 +179,5 @@ function buttonMatchesAction(text, action) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { parseSlotDateTime, looksLikeBlock, looksLikeQueue, looksLoggedOut, labelMatchesKind, buttonMatchesAction };
+  module.exports = { parseSlotDateTime, looksLikeBlock, looksLikeQueue, looksLoggedOut, looksLikeServiceClosed, parseReopenTime, labelMatchesKind, buttonMatchesAction };
 }
