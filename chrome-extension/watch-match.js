@@ -18,15 +18,39 @@ function availoNormalizeCentre(name) {
     .trim();
 }
 
+// A slot qualifies when it's at the watched centre AND falls inside the user's
+// wanted date window. The window has two optional bounds:
+//   • dateFrom — earliest date you'd accept (inclusive). Empty = no lower bound.
+//   • dateTo   — latest date you'd accept (inclusive, covers the whole day).
+// If dateTo isn't set we fall back to targetDate ("strictly earlier than my
+// current test date") so the change-a-booking use case is unchanged. With no
+// bounds at all, any date at the centre qualifies (first-time booker).
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
 function availoMatchesTarget(slot, prefs) {
   if (!slot || !prefs) return false;
   if (!slot.centre || !prefs.centre) return false;
   if (availoNormalizeCentre(slot.centre) !== availoNormalizeCentre(prefs.centre)) return false;
-  if (!prefs.targetDate) return true;
+
   const slotTime = new Date(slot.datetime).getTime();
-  const targetTime = new Date(prefs.targetDate).getTime();
-  if (Number.isNaN(slotTime) || Number.isNaN(targetTime)) return false;
-  return slotTime < targetTime;
+  if (Number.isNaN(slotTime)) return false;
+
+  if (prefs.dateFrom) {
+    const from = new Date(prefs.dateFrom).getTime();
+    if (!Number.isNaN(from) && slotTime < from) return false;
+  }
+
+  if (prefs.dateTo) {
+    // Inclusive of the whole dateTo day: reject only from the NEXT midnight on.
+    const to = new Date(prefs.dateTo).getTime();
+    if (!Number.isNaN(to) && slotTime >= to + ONE_DAY_MS) return false;
+  } else if (prefs.targetDate) {
+    const target = new Date(prefs.targetDate).getTime();
+    if (Number.isNaN(target)) return false;
+    if (slotTime >= target) return false;
+  }
+
+  return true;
 }
 
 // Alert-once logic extracted from watch-content.js so we can test it.

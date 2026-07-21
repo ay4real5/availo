@@ -21,6 +21,39 @@ function isSupported(url) {
   return re.test(url);
 }
 
+function formatAgo(at) {
+  if (!at) return "just now";
+  const s = Math.max(0, Math.round((Date.now() - at) / 1000));
+  if (s < 60) return `${s}s ago`;
+  return `${Math.floor(s / 60)} min ago`;
+}
+
+function fmtDay(d) {
+  if (!d) return null;
+  const dt = new Date(d);
+  if (Number.isNaN(dt.getTime())) return null;
+  return dt.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
+// One line telling the user exactly which dates Availo will alert on.
+function describeWindow(watch) {
+  const from = fmtDay(watch && watch.dateFrom);
+  const to = fmtDay(watch && (watch.dateTo || watch.targetDate));
+  if (from && to) return `Window: ${from} – ${to}`;
+  if (to) return `Alerting on dates before ${to}`;
+  if (from) return `Alerting from ${from} onwards`;
+  return "Alerting on any date at this centre";
+}
+
+// Live "what's happening" line for the watching view.
+function describeStatus(status) {
+  if (!status) return "Starting up — checking the page…";
+  const seen = `${status.total} date${status.total === 1 ? "" : "s"} seen`;
+  const win = `${status.inWindow} in your window`;
+  const month = status.month ? `${status.month} · ` : "";
+  return `${month}checked ${formatAgo(status.at)} · ${seen} · ${win}`;
+}
+
 function practiceLink() {
   const btn = document.createElement("button");
   btn.className = "link";
@@ -169,7 +202,11 @@ async function render() {
   const detail = state.detection
     ? `<div class="status watching"><strong>Slot found:</strong> ${state.detection.test_centre} — ${new Date(state.detection.slot_datetime).toLocaleString()}</div>`
     : "";
-  wrap.innerHTML = `<p class="status watching">Watching this tab${state.watch?.centre ? ` (${state.watch.centre})` : ""}.</p>${detail}`;
+  wrap.innerHTML = `
+    <p class="status watching">Watching this tab${state.watch?.centre ? ` (${state.watch.centre})` : ""}.</p>
+    <p class="status idle" style="font-size:12px;margin-top:4px;">${describeStatus(state.status)}</p>
+    <p class="status idle" style="font-size:12px;margin-top:2px;">${describeWindow(state.watch)}</p>
+    ${detail}`;
 
   if (state.detection) {
     const revealBtn = document.createElement("button");

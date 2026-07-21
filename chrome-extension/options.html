@@ -61,13 +61,14 @@
       <label for="vaultCentre">Test centre</label>
       <input id="vaultCentre" type="text" list="dvsaCentres" autocomplete="off" placeholder="Start typing a centre name…" />
       <datalist id="dvsaCentres"></datalist>
+      <p class="hint" style="margin-top:14px;">Only alert me for slots in this date window (leave a box blank for no limit on that end). If you already have a test booked, set "latest" to that date to only hear about earlier ones.</p>
       <div class="row">
         <div>
-          <label for="vaultDateFrom">Alert from</label>
+          <label for="vaultDateFrom">Earliest date you'd take</label>
           <input id="vaultDateFrom" type="date" />
         </div>
         <div>
-          <label for="vaultDateTo">Alert until (your current test date)</label>
+          <label for="vaultDateTo">Latest date you'd take</label>
           <input id="vaultDateTo" type="date" />
         </div>
       </div>

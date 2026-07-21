@@ -65,6 +65,59 @@ test("matches any date for the right centre when no target date is set", () => {
   assert.equal(ok, true);
 });
 
+test("window: matches a slot inside [dateFrom, dateTo]", () => {
+  const ok = availoMatchesTarget(
+    { centre: "Bolton", datetime: "2026-08-20T09:00:00.000Z" },
+    { centre: "Bolton", dateFrom: "2026-08-01T00:00:00.000Z", dateTo: "2026-09-30T00:00:00.000Z" },
+  );
+  assert.equal(ok, true);
+});
+
+test("window: rejects a slot before dateFrom", () => {
+  const ok = availoMatchesTarget(
+    { centre: "Bolton", datetime: "2026-07-31T09:00:00.000Z" },
+    { centre: "Bolton", dateFrom: "2026-08-01T00:00:00.000Z", dateTo: "2026-09-30T00:00:00.000Z" },
+  );
+  assert.equal(ok, false);
+});
+
+test("window: rejects a slot after dateTo", () => {
+  const ok = availoMatchesTarget(
+    { centre: "Bolton", datetime: "2026-10-01T09:00:00.000Z" },
+    { centre: "Bolton", dateFrom: "2026-08-01T00:00:00.000Z", dateTo: "2026-09-30T00:00:00.000Z" },
+  );
+  assert.equal(ok, false);
+});
+
+test("window: dateTo is inclusive of the whole final day (a midnight-UTC calendar date)", () => {
+  const ok = availoMatchesTarget(
+    { centre: "Bolton", datetime: "2026-09-30T00:00:00.000Z" },
+    { centre: "Bolton", dateFrom: "2026-08-01T00:00:00.000Z", dateTo: "2026-09-30T00:00:00.000Z" },
+  );
+  assert.equal(ok, true);
+});
+
+test("window: dateFrom alone (no upper bound) accepts anything on/after it", () => {
+  assert.equal(
+    availoMatchesTarget({ centre: "Bolton", datetime: "2030-01-01T00:00:00.000Z" }, { centre: "Bolton", dateFrom: "2026-08-01T00:00:00.000Z" }),
+    true,
+  );
+  assert.equal(
+    availoMatchesTarget({ centre: "Bolton", datetime: "2026-07-01T00:00:00.000Z" }, { centre: "Bolton", dateFrom: "2026-08-01T00:00:00.000Z" }),
+    false,
+  );
+});
+
+test("window: dateTo takes precedence over targetDate when both present", () => {
+  // dateTo (inclusive Sep 30) should allow a Sep 15 slot even though targetDate
+  // (Aug 15, strict-earlier) would have rejected it.
+  const ok = availoMatchesTarget(
+    { centre: "Bolton", datetime: "2026-09-15T00:00:00.000Z" },
+    { centre: "Bolton", targetDate: "2026-08-15T00:00:00.000Z", dateTo: "2026-09-30T00:00:00.000Z" },
+  );
+  assert.equal(ok, true);
+});
+
 test("rejects malformed dates", () => {
   const ok = availoMatchesTarget(
     { centre: "Bolton", datetime: "not-a-date" },

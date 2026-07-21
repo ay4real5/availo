@@ -37,6 +37,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // are transient UI state — fine to keep in memory.
 const detections = new Map(); // tabId -> { slotId, test_centre, slot_datetime }
 const notificationTabs = new Map(); // notificationId -> tabId
+const statuses = new Map(); // tabId -> { total, inWindow, month, at } (live watch status for the popup)
 
 async function getStored() {
   return chrome.storage.local.get(["backendUrl", "token", "userId", "email"]);
@@ -118,6 +119,7 @@ async function handleWatchMessage(message, sender, sendResponse) {
           watching: Boolean(watch),
           watch,
           detection: detections.get(message.tabId) || null,
+          status: statuses.get(message.tabId) || null,
           autoRefresh,
           vaultReady: AvailoVault.ready(await AvailoVault.get()),
         });
@@ -127,7 +129,24 @@ async function handleWatchMessage(message, sender, sendResponse) {
       case "WATCH_RESUME_QUERY": {
         // A watched tab reloaded and is asking whether to resume.
         const watch = await getWatch(sender.tab?.id);
-        sendResponse(watch ? { watching: true, centre: watch.centre, targetDate: watch.targetDate } : { watching: false });
+        sendResponse(watch
+          ? { watching: true, centre: watch.centre, targetDate: watch.targetDate, dateFrom: watch.dateFrom, dateTo: watch.dateTo }
+          : { watching: false });
+        break;
+      }
+
+      case "WATCH_STATUS": {
+        // Lightweight per-scan status from the content script, for the popup.
+        const tabId = sender.tab?.id;
+        if (tabId != null) {
+          statuses.set(tabId, {
+            total: message.total || 0,
+            inWindow: message.inWindow || 0,
+            month: message.month || null,
+            at: message.at || Date.now(),
+          });
+        }
+        sendResponse({ ok: true });
         break;
       }
 
@@ -136,6 +155,9 @@ async function handleWatchMessage(message, sender, sendResponse) {
         const tab = await chrome.tabs.get(tabId);
         const prefs = await apiFetch("/api/auth/preferences");
         if (!prefs) throw new Error("no_preferences_set");
+        // The wanted date window lives device-side in the vault (options page:
+        // "Alert from" / "Alert until"). Only alert for slots inside it.
+        const vault = await getVault();
 
         const session = await apiFetch("/api/watch/sessions", {
           method: "POST",
@@ -151,14 +173,19 @@ async function handleWatchMessage(message, sender, sendResponse) {
           sessionId: session.id,
           centre: prefs.centre,
           targetDate: prefs.current_test_date || null,
+          dateFrom: vault.dateFrom || null,
+          dateTo: vault.dateTo || null,
           nextRefreshAt: Date.now() + 90000,
         });
         detections.delete(tabId);
+        statuses.delete(tabId);
 
         await chrome.tabs.sendMessage(tabId, {
           type: "WATCH_START",
           centre: prefs.centre,
           targetDate: prefs.current_test_date || null,
+          dateFrom: vault.dateFrom || null,
+          dateTo: vault.dateTo || null,
         }).catch(() => {});
 
         ensureWatchAlarm();
@@ -173,9 +200,7 @@ async function handleWatchMessage(message, sender, sendResponse) {
       }
 
       case "USER_CLICKED_HOLD": {
-        const tabId = message.tabId;
-        await chrome.tabs.update(tabId, { active: true });
-        await chrome.tabs.sendMessage(tabId, { type: "REVEAL_SLOT" }).catch(() => {});
+        await revealSlotInTab(message.tabId);
         sendResponse({ ok: true });
         break;
       }
@@ -352,10 +377,25 @@ async function handleWatchMessage(message, sender, sendResponse) {
   }
 }
 
+// Jump the user straight onto the highlighted slot as fast as possible: focus
+// the browser window, activate the tab, and tell the content script to scroll
+// to + re-highlight the slot (re-verifying it's still live). Every second counts
+// when a cancellation can vanish.
+async function revealSlotInTab(tabId) {
+  if (tabId == null) return;
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    if (tab && tab.windowId != null) await chrome.windows.update(tab.windowId, { focused: true }).catch(() => {});
+  } catch { /* tab may be gone */ }
+  await chrome.tabs.update(tabId, { active: true }).catch(() => {});
+  await chrome.tabs.sendMessage(tabId, { type: "REVEAL_SLOT" }).catch(() => {});
+}
+
 async function stopWatch(tabId) {
   const watch = await getWatch(tabId);
   await clearWatch(tabId);
   detections.delete(tabId);
+  statuses.delete(tabId);
   await chrome.tabs.sendMessage(tabId, { type: "WATCH_STOP" }).catch(() => {});
   if (!watch || !watch.sessionId) return;
   try {
@@ -425,18 +465,16 @@ function notifyBlocked(tabId) {
   chrome.action.setBadgeBackgroundColor({ tabId, color: "#c24e3a" });
 }
 
+// Tapping the notification anywhere — the body OR the "Take me to the slot"
+// button — jumps straight to the highlighted slot. (Some platforms/mobile don't
+// surface the button, so the body tap must work too.)
 chrome.notifications.onButtonClicked.addListener(async (notificationId, buttonIndex) => {
   if (buttonIndex !== 0) return;
-  const tabId = notificationTabs.get(notificationId);
-  if (tabId == null) return;
-  await chrome.tabs.update(tabId, { active: true }).catch(() => {});
-  await chrome.tabs.sendMessage(tabId, { type: "REVEAL_SLOT" }).catch(() => {});
+  await revealSlotInTab(notificationTabs.get(notificationId));
 });
 
 chrome.notifications.onClicked.addListener(async (notificationId) => {
-  const tabId = notificationTabs.get(notificationId);
-  if (tabId == null) return;
-  await chrome.tabs.update(tabId, { active: true }).catch(() => {});
+  await revealSlotInTab(notificationTabs.get(notificationId));
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {

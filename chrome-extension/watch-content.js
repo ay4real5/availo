@@ -113,6 +113,22 @@
     if (soonest) {
       offerSlot(soonest, { count: ranked.length });
     }
+
+    reportStatus(ranked.length);
+  }
+
+  // Lightweight status for the popup: how many dates this month's page shows,
+  // how many are inside the user's window, which month, and when we last looked.
+  function reportStatus(inWindow) {
+    try {
+      const total = AvailoResolve.resultRows(document).length;
+      const monthEl = document.querySelector(".BookingCalendar-currentMonth");
+      const yearEl = document.querySelector(".BookingCalendar-currentYear");
+      const month = monthEl
+        ? (monthEl.textContent.trim() + (yearEl ? " " + yearEl.textContent.trim() : "")).trim()
+        : null;
+      chrome.runtime.sendMessage({ type: "WATCH_STATUS", total, inWindow, month, at: Date.now() });
+    } catch { /* status is best-effort */ }
   }
 
   // True while a detected slot is still on the page and recent enough that the
@@ -318,7 +334,7 @@
       chrome.runtime.sendMessage({ type: "WATCH_RESUME_QUERY" }, (res) => {
         if (chrome.runtime.lastError) return;
         if (res && res.watching) {
-          startWatching({ centre: res.centre, targetDate: res.targetDate });
+          startWatching({ centre: res.centre, targetDate: res.targetDate, dateFrom: res.dateFrom, dateTo: res.dateTo });
         }
       });
     } catch { /* background asleep; it will re-arm on next alarm tick */ }
@@ -338,7 +354,7 @@
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message.type === "WATCH_START") {
-      startWatching({ centre: message.centre, targetDate: message.targetDate });
+      startWatching({ centre: message.centre, targetDate: message.targetDate, dateFrom: message.dateFrom, dateTo: message.dateTo });
     } else if (message.type === "WATCH_STOP") {
       stopWatchingLocally();
     } else if (message.type === "REVEAL_SLOT") {
