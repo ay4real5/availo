@@ -167,7 +167,17 @@ const AvailoResolve = (() => {
   // practice fixture / any page without this header).
   function pageCentre(doc = document) {
     const h = doc.querySelector("#chosen-test-centre h1");
-    const text = h && (h.textContent || "").trim();
+    if (!h) return null;
+    // The h1 carries a screen-reader-only step label before the visible centre
+    // name — confirmed on the live "Book" flow:
+    //   <h1><span class="visuallyhidden">Test date / time</span>Sunderland</h1>
+    // Reading textContent directly gives "Test date / timeSunderland", so strip
+    // hidden helper spans and read just the visible text.
+    const clone = h.cloneNode(true);
+    if (clone.querySelectorAll) {
+      clone.querySelectorAll(".visuallyhidden, .govuk-visually-hidden, .visually-hidden, [hidden]").forEach((el) => el.remove());
+    }
+    const text = (clone.textContent || "").replace(/\s+/g, " ").trim();
     return text || null;
   }
 

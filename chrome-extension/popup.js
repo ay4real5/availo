@@ -45,16 +45,19 @@ function describeWindow(watch) {
   return "Alerting on any date at this centre";
 }
 
-// Live "what's happening" line for the watching view.
+// Live "what's happening" line for the watching view. The page holds EVERY
+// month's availability at once (not just the one on screen), so "total" is a
+// whole-calendar figure — say so, and lead with the number that matters (how
+// many are in the user's window).
 function describeStatus(status) {
   if (!status) return "Starting up — checking the page…";
-  const seen = `${status.total} date${status.total === 1 ? "" : "s"} seen`;
   const earliest = fmtDay(status.earliest);
   const win = status.inWindow > 0 && earliest
     ? `${status.inWindow} in your window (soonest ${earliest})`
     : `${status.inWindow} in your window`;
-  const month = status.month ? `${status.month} · ` : "";
-  return `${month}checked ${formatAgo(status.at)} · ${seen} · ${win}`;
+  const total = `${status.total} available across the whole calendar`;
+  const month = status.month ? `showing ${status.month} · ` : "";
+  return `${month}checked ${formatAgo(status.at)} · ${win} · ${total}`;
 }
 
 // True when the page's own centre differs from the one the user is set to watch,
@@ -88,7 +91,7 @@ function describeDiagnosis(d, savedCentre) {
   if (d.blocked) return "⚠ DVSA is showing a challenge or error here. Availo pauses on these pages — please continue manually.";
   if (d.page === "results") {
     if (d.rowCount === 0) return "This looks like the results page, but Availo can't see any available dates yet.";
-    let msg = `✓ Availo can read this page — it can see ${d.rowCount} available date${d.rowCount === 1 ? "" : "s"}`;
+    let msg = `✓ Availo can read this page — it can see ${d.rowCount} available date${d.rowCount === 1 ? "" : "s"} across the whole calendar (all months, not just the one on screen)`;
     msg += d.centre ? ` at ${d.centre}.` : ".";
     if (centreMismatch(d.centre, savedCentre)) {
       msg += ` ⚠ Heads up: you're set to watch ${savedCentre}, but this page is ${d.centre} — so watching here won't alert for ${savedCentre}. To watch ${d.centre}, set it as your centre in options.`;

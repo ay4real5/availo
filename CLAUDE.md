@@ -73,10 +73,18 @@ answer is always no.
   - `selectors.js` (`AvailoResolve`) understands BOTH the simple row/list results layout
     (fixture) AND the REAL DVSA month-calendar grid: bookable days are
     `td.BookingCalendar-date--bookable > … > a[data-date="YYYY-MM-DD"]`; the centre is
-    read from `#chosen-test-centre h1`. Confirmed against live DVSA markup 2026-07-16.
-    NOTE: other months' availability is NOT in the DOM — `#days`/`#months` are just
-    weekday/month name labels — so read-only detection can only see the currently
-    displayed month (see boundary: no auto-navigation).
+    read from `#chosen-test-centre h1` (which has a screen-reader-only step-label
+    span — `<span class="visuallyhidden">Test date / time</span>Sunderland` — that
+    `pageCentre` strips). Confirmed against live DVSA markup 2026-07-16..21.
+    IMPORTANT (corrected 2026-07-21): the calendar's `--bookable` cells for **all
+    months at once** are present in the DOM (the SlotPicker only *displays* one
+    month) — confirmed on the "Book" flow, 56 bookable dates spanning Jul–Dec while
+    July was on screen. So read-only detection already sees the **whole calendar's**
+    availability from one page; the window/target filter watches across every month
+    with NO navigation. (Earlier notes said "only the displayed month" — that was
+    wrong. `#days`/`#months` are just weekday/month name labels, a red herring.) The
+    "Change" flow uses the same SlotPicker component so this is very likely identical;
+    re-confirm there if it matters.
 - `backend/` — Node/Express + Supabase (Postgres), Web Push (VAPID) + email (Resend),
   JWT auth. Deployed on **Render**. Never touches DVSA.
 - `frontend/` — React/Vite PWA. Deployed on **Vercel**. Hosts `public/privacy.html`.
