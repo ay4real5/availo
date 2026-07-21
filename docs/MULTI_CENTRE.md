@@ -1,7 +1,23 @@
 # Design note — watching multiple test centres (2–3 nearby)
 
-Status: **design captured, not built.** This is the agreed approach for when we build it.
+Status: **partially built (2026-07-16).** The safety foundation — the shared refresh
+budget (item 3) — is DONE, so multiple watched tabs already stay within one centre's
+request budget. Still deferred: per-tab centre matching + a curated "my centres" list
+(items 2 & 4), because doing them coherently needs a backend centres list (otherwise a
+secondary centre gets on-screen alerts but no phone/email alert, since the backend alert
+path gates on the single saved `prefs.centre`). Also untested: DVSA's booking flow is a
+single server-side session (`execution=...`), so two live booking tabs may clobber each
+other — verify before promising simultaneous multi-tab watching.
 Priority: **after** turning on alerts (push/email) — see "Why alerts first" below.
+
+## Built so far
+- **Shared refresh budget** (`background.js` `watch-tick`): across ALL watched tabs, only
+  one page reloads per interval (round-robin, prefers a visible tab), so N tabs never
+  mean N× the requests. Local re-scans still run for every tab each tick.
+- **Centre-mismatch warning** (popup): if a watched tab's own centre
+  (`AvailoResolve.pageCentre`) differs from the centre being matched, the popup and
+  "Check this page" say so loudly — the missing safety that let Ayr get watched silently
+  under a Chorley config.
 
 ## The constraint that shapes the whole design
 Availo must never make DVSA **search/navigate** to a centre on its own — that's

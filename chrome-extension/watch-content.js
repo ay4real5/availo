@@ -114,20 +114,24 @@
       offerSlot(soonest, { count: ranked.length });
     }
 
-    reportStatus(ranked.length);
+    reportStatus(ranked);
   }
 
   // Lightweight status for the popup: how many dates this month's page shows,
-  // how many are inside the user's window, which month, and when we last looked.
-  function reportStatus(inWindow) {
+  // how many are inside the user's window (+ the earliest one), which month and
+  // centre the page is for, and when we last looked.
+  function reportStatus(ranked) {
     try {
       const total = AvailoResolve.resultRows(document).length;
+      const inWindow = ranked.length;
+      const earliest = ranked[0] ? ranked[0].datetime : null;
+      const centre = typeof AvailoResolve.pageCentre === "function" ? AvailoResolve.pageCentre(document) : null;
       const monthEl = document.querySelector(".BookingCalendar-currentMonth");
       const yearEl = document.querySelector(".BookingCalendar-currentYear");
       const month = monthEl
         ? (monthEl.textContent.trim() + (yearEl ? " " + yearEl.textContent.trim() : "")).trim()
         : null;
-      chrome.runtime.sendMessage({ type: "WATCH_STATUS", total, inWindow, month, at: Date.now() });
+      chrome.runtime.sendMessage({ type: "WATCH_STATUS", total, inWindow, earliest, month, centre, at: Date.now() });
     } catch { /* status is best-effort */ }
   }
 

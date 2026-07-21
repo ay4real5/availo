@@ -49,9 +49,23 @@ function describeWindow(watch) {
 function describeStatus(status) {
   if (!status) return "Starting up — checking the page…";
   const seen = `${status.total} date${status.total === 1 ? "" : "s"} seen`;
-  const win = `${status.inWindow} in your window`;
+  const earliest = fmtDay(status.earliest);
+  const win = status.inWindow > 0 && earliest
+    ? `${status.inWindow} in your window (soonest ${earliest})`
+    : `${status.inWindow} in your window`;
   const month = status.month ? `${status.month} · ` : "";
   return `${month}checked ${formatAgo(status.at)} · ${seen} · ${win}`;
+}
+
+// True when the page's own centre differs from the one the user is set to watch,
+// using the same normalisation the matcher uses (handles "(Euxton)"-style
+// qualifiers). Either name missing => no warning (we can't tell).
+function centreMismatch(pageCentre, savedCentre) {
+  if (!pageCentre || !savedCentre) return false;
+  if (typeof availoNormalizeCentre !== "function") {
+    return pageCentre.trim().toLowerCase() !== savedCentre.trim().toLowerCase();
+  }
+  return availoNormalizeCentre(pageCentre) !== availoNormalizeCentre(savedCentre);
 }
 
 function practiceLink() {
@@ -68,14 +82,18 @@ function practiceLink() {
 
 // Plain-language summary of what the extension can see on the current page —
 // so a non-technical user can confirm it's working without any DevTools.
-function describeDiagnosis(d) {
+function describeDiagnosis(d, savedCentre) {
   if (!d) return "Couldn't check this page. Try reloading it, then check again.";
   if (d.queued) return "⏳ You're in the DVSA queue. Wait here — don't refresh, or you'll lose your place. Availo pauses until you're through.";
   if (d.blocked) return "⚠ DVSA is showing a challenge or error here. Availo pauses on these pages — please continue manually.";
   if (d.page === "results") {
-    return d.rowCount > 0
-      ? `✓ Availo can read this page — it can see ${d.rowCount} available date${d.rowCount === 1 ? "" : "s"}.`
-      : "This looks like the results page, but Availo can't see any available dates yet.";
+    if (d.rowCount === 0) return "This looks like the results page, but Availo can't see any available dates yet.";
+    let msg = `✓ Availo can read this page — it can see ${d.rowCount} available date${d.rowCount === 1 ? "" : "s"}`;
+    msg += d.centre ? ` at ${d.centre}.` : ".";
+    if (centreMismatch(d.centre, savedCentre)) {
+      msg += ` ⚠ Heads up: you're set to watch ${savedCentre}, but this page is ${d.centre} — so watching here won't alert for ${savedCentre}. To watch ${d.centre}, set it as your centre in options.`;
+    }
+    return msg;
   }
   if (d.page === "login") {
     const ok = d.login.licence && d.login.bookingRef;
@@ -87,7 +105,7 @@ function describeDiagnosis(d) {
   return "This doesn't look like the DVSA change-test pages yet. Open your list of available tests, then check again.";
 }
 
-function diagnosticControls(tab) {
+function diagnosticControls(tab, savedCentre) {
   const container = document.createElement("div");
   const btn = document.createElement("button");
   btn.className = "link";
@@ -101,7 +119,7 @@ function diagnosticControls(tab) {
     result.textContent = "Checking…";
     let d = null;
     try { d = await chrome.tabs.sendMessage(tab.id, { type: "DIAGNOSE" }); } catch { d = null; }
-    result.textContent = describeDiagnosis(d);
+    result.textContent = describeDiagnosis(d, savedCentre);
   });
   container.appendChild(btn);
   container.appendChild(result);
@@ -154,7 +172,7 @@ async function render() {
       addBtn.textContent = "Add your details";
       addBtn.addEventListener("click", () => chrome.runtime.openOptionsPage());
       wrap.appendChild(addBtn);
-      wrap.appendChild(diagnosticControls(tab));
+      wrap.appendChild(diagnosticControls(tab, state.savedCentre));
       if (!IS_PACKAGED) wrap.appendChild(practiceLink());
       appEl.appendChild(wrap);
       return;
@@ -191,7 +209,7 @@ async function render() {
     manageBtn.addEventListener("click", () => chrome.runtime.openOptionsPage());
     wrap.appendChild(manageBtn);
 
-    wrap.appendChild(diagnosticControls(tab));
+    wrap.appendChild(diagnosticControls(tab, state.savedCentre));
     if (!IS_PACKAGED) wrap.appendChild(practiceLink());
     appEl.appendChild(wrap);
     return;
@@ -202,11 +220,17 @@ async function render() {
   const detail = state.detection
     ? `<div class="status watching"><strong>Slot found:</strong> ${state.detection.test_centre} — ${new Date(state.detection.slot_datetime).toLocaleString()}</div>`
     : "";
+  // If the page's real centre differs from the one we're matching against, this
+  // tab will never alert — surface that loudly instead of watching in silence.
+  const pageCentre = state.status && state.status.centre;
+  const mismatchNote = centreMismatch(pageCentre, state.watch && state.watch.centre)
+    ? `<div class="status" style="background:#fbeae6;color:#7a2718;font-size:12px;margin-top:6px;">⚠ This page is <strong>${pageCentre}</strong>, but you're watching for <strong>${state.watch.centre}</strong> — no alerts will fire here. Open a ${state.watch.centre} tab, or change your centre in options.</div>`
+    : "";
   wrap.innerHTML = `
     <p class="status watching">Watching this tab${state.watch?.centre ? ` (${state.watch.centre})` : ""}.</p>
     <p class="status idle" style="font-size:12px;margin-top:4px;">${describeStatus(state.status)}</p>
     <p class="status idle" style="font-size:12px;margin-top:2px;">${describeWindow(state.watch)}</p>
-    ${detail}`;
+    ${mismatchNote}${detail}`;
 
   if (state.detection) {
     const revealBtn = document.createElement("button");
@@ -229,7 +253,7 @@ async function render() {
   });
   wrap.appendChild(stopBtn);
 
-  wrap.appendChild(diagnosticControls(tab));
+  wrap.appendChild(diagnosticControls(tab, state.savedCentre));
   if (!IS_PACKAGED) wrap.appendChild(practiceLink());
   appEl.appendChild(wrap);
 }

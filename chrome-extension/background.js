@@ -112,6 +112,7 @@ async function handleWatchMessage(message, sender, sendResponse) {
         const watch = await getWatch(message.tabId);
         const { token, email } = await getStored();
         const autoRefresh = await getAutoRefresh();
+        const vault = await AvailoVault.get();
         sendResponse({
           ok: true,
           signedIn: Boolean(token),
@@ -121,7 +122,8 @@ async function handleWatchMessage(message, sender, sendResponse) {
           detection: detections.get(message.tabId) || null,
           status: statuses.get(message.tabId) || null,
           autoRefresh,
-          vaultReady: AvailoVault.ready(await AvailoVault.get()),
+          vaultReady: AvailoVault.ready(vault),
+          savedCentre: vault.centre || null,
         });
         break;
       }
@@ -142,7 +144,9 @@ async function handleWatchMessage(message, sender, sendResponse) {
           statuses.set(tabId, {
             total: message.total || 0,
             inWindow: message.inWindow || 0,
+            earliest: message.earliest || null,
             month: message.month || null,
+            centre: message.centre || null,
             at: message.at || Date.now(),
           });
         }
@@ -491,6 +495,19 @@ function ensureWatchAlarm() {
   });
 }
 
+// Shared refresh budget across ALL watched tabs: only ONE page is reloaded per
+// interval (round-robin), so watching N centres never means N× the requests
+// (N× the CAPTCHA/block risk). Total network rate stays ~ one centre's worth —
+// spreading across centres just means each is refreshed proportionally less
+// often. Local re-scans (no network) still happen for every tab every tick.
+async function getSharedRefresh() {
+  const r = await chrome.storage.session.get("availoSharedRefresh");
+  return r.availoSharedRefresh || { nextAt: 0, lastTabId: null };
+}
+async function setSharedRefresh(v) {
+  await chrome.storage.session.set({ availoSharedRefresh: v });
+}
+
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name !== "watch-tick") return;
   const now = Date.now();
@@ -500,27 +517,47 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 
   const { enabled: autoRefreshOn, baseSeconds } = await getAutoRefresh();
 
+  // Heartbeat every backend session so staleness detection stays accurate.
   for (const watch of watches) {
-    // Keep the backend session fresh (only if we have one).
     if (watch.sessionId) {
-      try {
-        await apiFetch(`/api/watch/sessions/${watch.sessionId}/heartbeat`, { method: "POST" });
-      } catch { /* next tick retries */ }
-    }
-
-    // Gentle auto-refresh so new cancellations surface — slow, jittered, and the
-    // content script refuses to refresh into a block. Otherwise just re-scan.
-    if (autoRefreshOn && watch.nextRefreshAt && now >= watch.nextRefreshAt) {
-      await chrome.tabs.sendMessage(watch.tabId, { type: "REFRESH_PAGE" }).catch(() => {});
-      // Ease off while the tab is hidden: stretch the gap to cut total requests
-      // (fewer CAPTCHA triggers) during long unattended stretches. This is load
-      // reduction — NOT pattern-hiding — and the content script still refuses to
-      // refresh into a block regardless.
-      const hiddenMultiplier = watch.hidden ? 1.5 : 1;
-      const delay = nextRefreshDelay(baseSeconds * 1000 * hiddenMultiplier, 30000);
-      await setWatch(watch.tabId, { ...watch, nextRefreshAt: now + delay });
-    } else {
-      await chrome.tabs.sendMessage(watch.tabId, { type: "RESCAN" }).catch(() => {});
+      try { await apiFetch(`/api/watch/sessions/${watch.sessionId}/heartbeat`, { method: "POST" }); }
+      catch { /* next tick retries */ }
     }
   }
+
+  // Re-scan the loaded DOM of every OTHER tab (free — no network).
+  const rescanExcept = (exceptTabId) => Promise.all(
+    watches
+      .filter((w) => w.tabId !== exceptTabId)
+      .map((w) => chrome.tabs.sendMessage(w.tabId, { type: "RESCAN" }).catch(() => {})),
+  );
+
+  if (!autoRefreshOn) { await rescanExcept(null); return; }
+
+  const shared = await getSharedRefresh();
+  // Ease the shared cadence off while every watched tab is hidden (nobody's
+  // looking) — load reduction, not pattern-hiding; the content script still
+  // refuses to refresh into a block regardless.
+  const anyVisible = watches.some((w) => !w.hidden);
+  const delay = nextRefreshDelay(baseSeconds * 1000 * (anyVisible ? 1 : 1.5), 30000);
+
+  // First tick after start/restart: arm the budget without an instant reload —
+  // the user just loaded the page themselves.
+  if (!shared.nextAt || now < shared.nextAt) {
+    if (!shared.nextAt) await setSharedRefresh({ nextAt: now + delay, lastTabId: shared.lastTabId });
+    await rescanExcept(null);
+    return;
+  }
+
+  // Budget's due: refresh exactly ONE tab, round-robin (skip the one refreshed
+  // last so multiple centres take turns), preferring a visible tab.
+  const ordered = watches.slice().sort((a, b) => a.tabId - b.tabId);
+  const pick =
+    ordered.find((w) => w.tabId !== shared.lastTabId && !w.hidden) ||
+    ordered.find((w) => w.tabId !== shared.lastTabId) ||
+    ordered[0];
+
+  await chrome.tabs.sendMessage(pick.tabId, { type: "REFRESH_PAGE" }).catch(() => {});
+  await setSharedRefresh({ nextAt: now + delay, lastTabId: pick.tabId });
+  await rescanExcept(pick.tabId);
 });
