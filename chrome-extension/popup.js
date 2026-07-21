@@ -162,7 +162,7 @@ async function render() {
       <p>Open the DVSA "change your driving test" page, then come back here.</p>
       <p class="status idle">Not on a supported page</p>
     `;
-    if (!state.vaultReady) {
+    if (!state.savedCentre) {
       const addBtn = document.createElement("button");
       addBtn.className = "primary";
       addBtn.textContent = "Add your details";
@@ -178,8 +178,11 @@ async function render() {
   if (!state.watching) {
     const wrap = document.createElement("div");
 
-    if (!state.vaultReady) {
-      wrap.innerHTML = `<p>Add your licence and booking reference before you start.</p>`;
+    // Watching only needs a centre (+ date window) — it's read-only. Licence /
+    // booking reference are only for the optional Fast-Path autofill, so they're
+    // NOT required to start watching.
+    if (!state.savedCentre) {
+      wrap.innerHTML = `<p>Set your test centre and dates first — that's all Availo needs to start watching.</p>`;
       const addBtn = document.createElement("button");
       addBtn.className = "primary";
       addBtn.textContent = "Add your details";
@@ -191,7 +194,7 @@ async function render() {
       return;
     }
 
-    wrap.innerHTML = `<p>Availo will watch this tab, highlight an earlier slot, and alert you. Nothing is ever booked, held, or paid automatically.</p>`;
+    wrap.innerHTML = `<p>Availo will watch this tab, highlight a matching slot, and alert you. Nothing is ever booked, held, or paid automatically.</p>`;
 
     const startBtn = document.createElement("button");
     startBtn.className = "primary";
@@ -207,14 +210,24 @@ async function render() {
     });
     wrap.appendChild(startBtn);
 
-    const fpBtn = document.createElement("button");
-    fpBtn.className = "accent";
-    fpBtn.textContent = "Fast-Path now (fill & jump to slot)";
-    fpBtn.addEventListener("click", async () => {
-      await sendToBackground({ type: "ARM_FASTPATH", tabId: tab.id });
-      window.close();
-    });
-    wrap.appendChild(fpBtn);
+    // Fast-Path autofills the DVSA login — only useful once licence + booking
+    // reference are saved. Otherwise, nudge the user to add them (optional).
+    if (state.vaultReady) {
+      const fpBtn = document.createElement("button");
+      fpBtn.className = "accent";
+      fpBtn.textContent = "Fast-Path now (fill & jump to slot)";
+      fpBtn.addEventListener("click", async () => {
+        await sendToBackground({ type: "ARM_FASTPATH", tabId: tab.id });
+        window.close();
+      });
+      wrap.appendChild(fpBtn);
+    } else {
+      const fpHint = document.createElement("button");
+      fpHint.className = "link";
+      fpHint.textContent = "Add licence & booking ref to enable one-tap autofill";
+      fpHint.addEventListener("click", () => chrome.runtime.openOptionsPage());
+      wrap.appendChild(fpHint);
+    }
 
     const manageBtn = document.createElement("button");
     manageBtn.className = "link";
