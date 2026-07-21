@@ -145,6 +145,7 @@ async function handleWatchMessage(message, sender, sendResponse) {
             total: message.total || 0,
             inWindow: message.inWindow || 0,
             earliest: message.earliest || null,
+            soonestOverall: message.soonestOverall || null,
             month: message.month || null,
             centre: message.centre || null,
             at: message.at || Date.now(),
@@ -422,7 +423,10 @@ async function stopWatch(tabId) {
 }
 
 function notifyDetection(tabId, centre, slotDatetime, personName) {
-  const when = new Date(slotDatetime).toLocaleString();
+  // Full, friendly date so the month is unmistakable (e.g. "Sat 19 October 2026").
+  const when = new Date(slotDatetime).toLocaleDateString(undefined, {
+    weekday: "short", day: "numeric", month: "long", year: "numeric",
+  });
   const who = personName ? `${personName}: ` : "";
   // Stable per-tab id so repeat detections update the same toast in place
   // instead of stacking dozens of separate notifications.

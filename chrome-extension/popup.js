@@ -51,10 +51,18 @@ function describeWindow(watch) {
 // many are in the user's window).
 function describeStatus(status) {
   if (!status) return "Starting up — checking the page…";
-  const earliest = fmtDay(status.earliest);
-  const win = status.inWindow > 0 && earliest
-    ? `${status.inWindow} in your window (soonest ${earliest})`
-    : `${status.inWindow} in your window`;
+  let win;
+  if (status.inWindow > 0) {
+    const earliest = fmtDay(status.earliest);
+    win = earliest ? `${status.inWindow} in your window (soonest ${earliest})` : `${status.inWindow} in your window`;
+  } else {
+    // Nothing in the window — nudge with the soonest slot that DOES exist, so an
+    // over-narrow window (e.g. an August window at a centre with none) is obvious.
+    const soon = fmtDay(status.soonestOverall);
+    win = soon
+      ? `0 in your window — soonest anywhere is ${soon} (widen your window to catch it)`
+      : "0 in your window";
+  }
   const total = `${status.total} available across the whole calendar`;
   const month = status.month ? `showing ${status.month} · ` : "";
   return `${month}checked ${formatAgo(status.at)} · ${win} · ${total}`;

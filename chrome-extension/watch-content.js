@@ -28,6 +28,7 @@
   let loggedOutReported = false;
   let queuedReported = false;
   let serviceClosedState = false; // DVSA's overnight closure, tracked for transitions
+  let activeHighlightedKey = null; // which offered slot is currently ringed IN VIEW
 
   ensureHighlightStyle();
 
@@ -132,6 +133,27 @@
       offerSlot(soonest, { count: ranked.length });
     }
 
+    // If we've already offered a slot that was in another month, and the user has
+    // now navigated to that month (its cell just became visible), ring it — so
+    // "switch to October" actually pays off without re-alerting.
+    if (activeSlotInfo) {
+      const key = `${activeSlotInfo.centre}|${activeSlotInfo.datetime}`;
+      const cell = findSlotRow(activeSlotInfo.centre, activeSlotInfo.datetime);
+      const el = cell && (cell.selectEl || cell.el);
+      if (el && isVisible(el)) {
+        if (activeHighlightedKey !== key) {
+          activeSelectElement = el;
+          withObserverPaused(() => {
+            highlight(el);
+            showBanner(activeSlotInfo.centre, activeSlotInfo.datetime, { count: ranked.length, visible: true });
+          });
+          activeHighlightedKey = key;
+        }
+      } else {
+        activeHighlightedKey = null; // navigated away / not on screen
+      }
+    }
+
     reportStatus(ranked);
   }
 
@@ -140,16 +162,20 @@
   // centre the page is for, and when we last looked.
   function reportStatus(ranked) {
     try {
-      const total = AvailoResolve.resultRows(document).length;
+      const allRows = AvailoResolve.resultRows(document);
+      const total = allRows.length;
       const inWindow = ranked.length;
       const earliest = ranked[0] ? ranked[0].datetime : null;
+      // Soonest available at this centre regardless of the user's window — lets
+      // the popup nudge "nothing in your window, but soonest anywhere is X".
+      const soonestOverall = total ? allRows.map((r) => r.datetime).sort()[0] : null;
       const centre = typeof AvailoResolve.pageCentre === "function" ? AvailoResolve.pageCentre(document) : null;
       const monthEl = document.querySelector(".BookingCalendar-currentMonth");
       const yearEl = document.querySelector(".BookingCalendar-currentYear");
       const month = monthEl
         ? (monthEl.textContent.trim() + (yearEl ? " " + yearEl.textContent.trim() : "")).trim()
         : null;
-      chrome.runtime.sendMessage({ type: "WATCH_STATUS", total, inWindow, earliest, month, centre, at: Date.now() });
+      chrome.runtime.sendMessage({ type: "WATCH_STATUS", total, inWindow, earliest, soonestOverall, month, centre, at: Date.now() });
     } catch { /* status is best-effort */ }
   }
 
@@ -179,18 +205,24 @@
     // Our own banner + highlight writes must not wake the MutationObserver —
     // otherwise they feed straight back into scanForSlots and, with two or more
     // matching slots, ping-pong into a notification storm.
+    const visible = isVisible(activeSelectElement);
     withObserverPaused(() => {
-      showBanner(rowInfo.centre, rowInfo.datetime, { count });
-      // Auto-highlight the moment we detect it, so someone who remotes in / comes
-      // back sees it already ringed and is one click from Select. (Highlight only —
-      // the extension still never clicks it.)
-      highlight(activeSelectElement);
+      showBanner(rowInfo.centre, rowInfo.datetime, { count, visible });
+      // Ring it immediately IF it's in the month on screen. If it's in another
+      // month (present in the DOM but hidden), we can't visibly ring it — the
+      // banner tells the user which month to switch to; scanForSlots re-rings it
+      // automatically once they navigate there.
+      if (visible) { highlight(activeSelectElement); activeHighlightedKey = `${rowInfo.centre}|${rowInfo.datetime}`; }
+      else { activeHighlightedKey = null; }
     });
   }
 
-  function showBanner(centre, datetime, { count = 1 } = {}) {
+  function showBanner(centre, datetime, { count = 1, visible = true } = {}) {
     removeBanner();
-    const many = count > 1 ? `${count} earlier slots — here's the soonest` : "Availo: earlier slot found";
+    const many = count > 1 ? `${count} matching slots — here's the soonest` : "Availo: matching slot found";
+    const guidance = visible
+      ? "We'll scroll to it and highlight it — you click Select to secure it."
+      : `It's in <strong>${monthName(datetime)}</strong> — a different month than the one on screen. Click the <strong>›</strong> arrow to ${monthName(datetime)} and Availo will ring it for you.`;
     const banner = document.createElement("div");
     banner.id = BANNER_ID;
     banner.style.cssText = [
@@ -202,12 +234,13 @@
     ].join(";");
     banner.innerHTML = `
       <div style="font-weight:700;margin-bottom:6px;">${many}</div>
-      <div style="margin-bottom:12px;">${centre} — ${new Date(datetime).toLocaleString()}</div>
-      <button id="availo-reveal-btn" style="width:100%;padding:10px;font-weight:700;background:#2f6f62;color:#fff;border:none;border-radius:999px;cursor:pointer;">Show me the slot</button>
-      <p style="margin:8px 0 0;font-size:12px;color:#67766c;">We'll scroll to it and highlight it — you click Select to secure it.</p>
+      <div style="margin-bottom:12px;">${centre} — ${niceDate(datetime)}</div>
+      ${visible ? `<button id="availo-reveal-btn" style="width:100%;padding:10px;font-weight:700;background:#2f6f62;color:#fff;border:none;border-radius:999px;cursor:pointer;">Show me the slot</button>` : ""}
+      <p style="margin:8px 0 0;font-size:12px;color:#67766c;">${guidance}</p>
     `;
     document.body.appendChild(banner);
-    document.getElementById("availo-reveal-btn").addEventListener("click", revealSlot);
+    const revealBtn = document.getElementById("availo-reveal-btn");
+    if (revealBtn) revealBtn.addEventListener("click", revealSlot);
   }
 
   function removeBanner() {
@@ -227,6 +260,22 @@
     el.scrollIntoView({ behavior: "smooth", block: "center" });
     el.classList.add(HIGHLIGHT_CLASS);
     try { el.focus({ preventScroll: true }); } catch { /* not focusable */ }
+  }
+
+  // Is the element actually rendered? A slot in a NON-displayed calendar month is
+  // present in the DOM but hidden (the SlotPicker only shows one month), so
+  // scrolling/ringing it would be invisible. offsetWidth/Height + client rects
+  // are all zero for a display:none-ancestor element.
+  function isVisible(el) {
+    return !!(el && (el.offsetWidth || el.offsetHeight || (el.getClientRects && el.getClientRects().length)));
+  }
+
+  // Friendly date + the full month name, for banners/guidance.
+  function niceDate(datetime) {
+    return new Date(datetime).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "long", year: "numeric" });
+  }
+  function monthName(datetime) {
+    return new Date(datetime).toLocaleDateString(undefined, { month: "long" });
   }
 
   // The extension's ONLY interaction with the slot control: bring it into view
@@ -266,11 +315,21 @@
       slot_datetime: new Date(activeSlotInfo.datetime).toISOString(),
     });
 
+    // If the slot is in a month that isn't on screen, we can't scroll to it —
+    // guide the user to switch months instead of silently doing nothing.
+    if (!isVisible(activeSelectElement)) {
+      activeHighlightedKey = null;
+      infoBanner(`<strong>${niceDate(target.datetime)}</strong> is in <strong>${monthName(target.datetime)}</strong>, a different month than the one on screen.<br>Click the <strong>›</strong> (next month) arrow on the calendar until you reach ${monthName(target.datetime)} — Availo will ring it automatically when you get there.`);
+      chrome.runtime.sendMessage({ type: "HOLD_RESULT", outcome: "attempted", message: "Slot is in a non-displayed month; guided the user to navigate there." });
+      return;
+    }
+
     withObserverPaused(() => {
       highlight(activeSelectElement);
+      activeHighlightedKey = `${target.centre}|${target.datetime}`;
 
       if (replaced) {
-        infoBanner(`<strong>That one just went.</strong> We've highlighted the next earliest instead:<br>${target.centre} — ${new Date(target.datetime).toLocaleString()}<br><span style="color:#67766c;">Click <strong>Select</strong> on it to secure your test.</span>`);
+        infoBanner(`<strong>That one just went.</strong> We've highlighted the next earliest instead:<br>${target.centre} — ${niceDate(target.datetime)}<br><span style="color:#67766c;">Click <strong>Select</strong> on it to secure your test.</span>`);
       } else {
         removeBanner();
       }
@@ -337,9 +396,11 @@
     alertedKeys = new Set();
     activeSelectElement = null;
     activeSlotInfo = null;
+    activeHighlightedKey = null;
     offerActiveSince = 0;
     loggedOutReported = false;
     queuedReported = false;
+    serviceClosedState = false;
 
     observer = new MutationObserver(scheduleScan);
     observer.observe(document.body, { childList: true, subtree: true });
@@ -367,6 +428,7 @@
     prefs = null;
     activeSelectElement = null;
     activeSlotInfo = null;
+    activeHighlightedKey = null;
     offerActiveSince = 0;
     if (observer) { observer.disconnect(); observer = null; }
     if (rescanTimer) { clearInterval(rescanTimer); rescanTimer = null; }
