@@ -83,6 +83,16 @@ async function syncPreferences(centre, dateTo) {
   }
 }
 
+// Plain-English description of the alert window. BOTH ends are honoured by the
+// matcher — describe them both, not just the upper bound.
+function windowSentence(dateFrom, dateTo) {
+  const fmt = (d) => new Date(d).toLocaleDateString();
+  if (dateFrom && dateTo) return `for slots between ${fmt(dateFrom)} and ${fmt(dateTo)}`;
+  if (dateTo) return `for slots on or before ${fmt(dateTo)}`;
+  if (dateFrom) return `for slots from ${fmt(dateFrom)} onwards`;
+  return "for any available slot";
+}
+
 async function saveVault() {
   const saved = await AvailoVault.save({
     name: document.getElementById("vaultName").value,
@@ -97,9 +107,7 @@ async function saveVault() {
 
   const prefs = await syncPreferences(saved.centre, saved.dateTo);
   if (prefs) {
-    vaultStatusEl.textContent = prefs.current_test_date
-      ? `Saved — Availo will alert on anything earlier than ${new Date(prefs.current_test_date).toLocaleDateString()} at ${prefs.centre}.`
-      : `Saved — Availo will alert on the first available date at ${prefs.centre}.`;
+    vaultStatusEl.textContent = `Saved — Availo will alert ${windowSentence(saved.dateFrom, saved.dateTo)} at ${saved.centre}.`;
     await renderPrefsSummary(await getStored());
   } else {
     vaultStatusEl.textContent = "Saved. Your details stay on this device only.";
@@ -119,9 +127,10 @@ async function renderPrefsSummary(stored) {
       summaryEl.textContent = "No preferences set yet — open the Availo dashboard to set your centre and target date.";
       return;
     }
-    summaryEl.textContent = `Watching for: ${prefs.centre}${
-      prefs.current_test_date ? `, earlier than ${new Date(prefs.current_test_date).toLocaleDateString()}` : ""
-    }`;
+    // The full window (both bounds) lives in the local vault; the backend only
+    // stores the upper bound. Describe the real window the matcher uses.
+    const vault = await AvailoVault.get();
+    summaryEl.textContent = `Watching for: ${prefs.centre} — ${windowSentence(vault.dateFrom, vault.dateTo)}`;
   } catch {
     summaryEl.textContent = "";
   }
