@@ -223,6 +223,10 @@ const AvailoResolve = (() => {
       search: { centre: !!search.centre, dateFrom: !!search.dateFrom, submit: !!search.submit },
       rowCount: rows.length,
       centre: pageCentre(doc),
+      // The soonest available date across the whole calendar (ISO strings sort
+      // chronologically) — a concrete number the user can sanity-check, unlike
+      // the raw all-months total.
+      soonest: rows.length ? rows.map((r) => r.datetime).sort()[0] : null,
     };
   }
 

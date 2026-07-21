@@ -91,8 +91,10 @@ function describeDiagnosis(d, savedCentre) {
   if (d.blocked) return "⚠ DVSA is showing a challenge or error here. Availo pauses on these pages — please continue manually.";
   if (d.page === "results") {
     if (d.rowCount === 0) return "This looks like the results page, but Availo can't see any available dates yet.";
-    let msg = `✓ Availo can read this page — it can see ${d.rowCount} available date${d.rowCount === 1 ? "" : "s"} across the whole calendar (all months, not just the one on screen)`;
-    msg += d.centre ? ` at ${d.centre}.` : ".";
+    const soon = fmtDay(d.soonest);
+    let msg = `✓ Availo can read this page${d.centre ? ` at ${d.centre}` : ""}`;
+    if (soon) msg += ` — soonest available slot is ${soon}`;
+    msg += `. It sees ${d.rowCount} available date${d.rowCount === 1 ? "" : "s"} across the whole calendar (all months, not just the one on screen).`;
     if (centreMismatch(d.centre, savedCentre)) {
       msg += ` ⚠ Heads up: you're set to watch ${savedCentre}, but this page is ${d.centre} — so watching here won't alert for ${savedCentre}. To watch ${d.centre}, set it as your centre in options.`;
     }
