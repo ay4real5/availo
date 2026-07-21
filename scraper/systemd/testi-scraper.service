@@ -1,0 +1,16 @@
+[Unit]
+Description=Testi scraper supervisor
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/testi-mvp/scraper
+ExecStart=/usr/bin/node /opt/testi-mvp/scraper/supervisor.js
+Restart=on-failure
+RestartSec=5
+Environment=NODE_ENV=production
+EnvironmentFile=/opt/testi-mvp/scraper/.env
+
+[Install]
+WantedBy=multi-user.target

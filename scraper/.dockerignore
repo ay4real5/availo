@@ -1,0 +1,8 @@
+node_modules
+__pycache__
+*.pyc
+.env
+logs
+.proxy_state.json
+mock_site/.mock_state.json
+systemd
