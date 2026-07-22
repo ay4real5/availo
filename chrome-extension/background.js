@@ -398,6 +398,17 @@ async function handleWatchMessage(message, sender, sendResponse) {
         break;
       }
 
+      // Fires even when nothing is being watched yet (e.g. DVSA's Imperva/
+      // hCaptcha check appears during sign-in, before the user ever reaches a
+      // results page to click Start Watching). No session to log this
+      // against — just a local heads-up so it's never silently missed.
+      case "PASSIVE_BLOCKED": {
+        const tabId = sender.tab?.id;
+        if (tabId != null) notifyBlocked(tabId);
+        sendResponse({ ok: true });
+        break;
+      }
+
       default:
         break;
     }

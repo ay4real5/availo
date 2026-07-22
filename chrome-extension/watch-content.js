@@ -32,6 +32,25 @@
 
   ensureHighlightStyle();
 
+  // Passive block/CAPTCHA awareness — runs once on every page load regardless
+  // of whether a watch is active. DVSA's Imperva/hCaptcha challenge can
+  // appear during sign-in, well before the user has a results page to click
+  // "Start Watching" on — scanForSlots()'s block check below only runs while
+  // `watching` is true, so without this, a challenge hit before the first
+  // watch starts would go completely unflagged. Read-only, same as always:
+  // this only tells the human it's there, never solves or clicks it.
+  function passiveBlockCheck() {
+    if (!AvailoResolve.blocked(document)) return;
+    removeBanner();
+    const banner = document.createElement("div");
+    banner.id = BANNER_ID;
+    banner.style.cssText = "position:fixed;top:16px;right:16px;z-index:2147483647;background:#fbeae6;border:2px solid #c24e3a;border-radius:12px;padding:14px 16px;font-family:sans-serif;font-size:13px;max-width:300px;color:#232a22;";
+    banner.textContent = "Availo: DVSA is showing a security check on this page. This is normal — tick the box yourself to continue, Availo never does this for you.";
+    document.body.appendChild(banner);
+    try { chrome.runtime.sendMessage({ type: "PASSIVE_BLOCKED", page_url: window.location.href }).catch(() => {}); } catch { /* background asleep; nothing to retry, this only fires once per load anyway */ }
+  }
+  passiveBlockCheck();
+
   // Tell the background when this tab becomes hidden/visible so it can ease the
   // refresh cadence while nobody's looking (fewer requests, gentler on DVSA).
   function reportVisibility() {
