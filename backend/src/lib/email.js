@@ -30,7 +30,10 @@ function fmtTime(iso) {
   return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 }
 
-function buildSlotAlertHtml({ userName, centre, slots }) {
+function buildSlotAlertHtml({ userName, centre, slots, test = false }) {
+  const testBanner = test
+    ? `<table width="100%" cellpadding="0" cellspacing="0" style="background:#1d70b8;"><tr><td style="padding:12px 30px;color:#fff;font-size:15px;font-weight:700;">✅ This is a TEST alert — your email alerts are working. A real one looks just like this.</td></tr></table>`
+    : "";
   const slotRows = slots
     .slice(0, 5)
     .map(
@@ -70,6 +73,8 @@ function buildSlotAlertHtml({ userName, centre, slots }) {
       </td>
     </tr>
   </table>
+
+  ${testBanner}
 
   <!-- Green confirmation banner -->
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#00703c;">
@@ -155,17 +160,18 @@ function buildSlotAlertHtml({ userName, centre, slots }) {
 </html>`;
 }
 
-export async function sendSlotAlert({ to, userName, centre, slots }) {
+export async function sendSlotAlert({ to, userName, centre, slots, test = false }) {
   const resend = getResend();
   if (!resend) {
     console.log(
-      `[email] RESEND_API_KEY not set — would send slot alert to ${to} (${slots.length} slots at ${centre})`,
+      `[email] RESEND_API_KEY not set — would send ${test ? "TEST " : ""}slot alert to ${to} (${slots.length} slots at ${centre})`,
     );
     return { skipped: true };
   }
 
-  const subject =
-    slots.length === 1
+  const subject = test
+    ? "Availo test alert — your email alerts are working ✅"
+    : slots.length === 1
       ? `Earlier driving test slot available at ${centre}`
       : `${slots.length} earlier driving test slots found at ${centre}`;
 
@@ -174,7 +180,7 @@ export async function sendSlotAlert({ to, userName, centre, slots }) {
       from: getFrom(),
       to,
       subject,
-      html: buildSlotAlertHtml({ userName, centre, slots }),
+      html: buildSlotAlertHtml({ userName, centre, slots, test }),
     });
 
     if (error) {

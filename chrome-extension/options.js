@@ -11,11 +11,12 @@ const setupSectionEl = document.getElementById("setupSection");
 const vaultSectionEl = document.getElementById("vaultSection");
 const refreshSectionEl = document.getElementById("refreshSection");
 const timingSectionEl = document.getElementById("timingSection");
+const historySectionEl = document.getElementById("historySection");
 const statusEl = document.getElementById("status");
 const vaultStatusEl = document.getElementById("vaultStatus");
 const refreshStatusEl = document.getElementById("refreshStatus");
 
-const SIGNED_IN_SECTIONS = [setupSectionEl, vaultSectionEl, refreshSectionEl, timingSectionEl];
+const SIGNED_IN_SECTIONS = [setupSectionEl, vaultSectionEl, refreshSectionEl, timingSectionEl, historySectionEl];
 
 async function getStored() {
   return chrome.storage.local.get(["backendUrl", "token", "userId", "email"]);
@@ -34,6 +35,7 @@ async function renderState() {
     await renderRefresh();
     await renderPrefsSummary(stored);
     await renderSetupStatus(stored);
+    await renderHistory(stored);
   } else {
     signedOutEl.style.display = "block";
     signedInEl.style.display = "none";
@@ -77,6 +79,30 @@ async function renderSetupStatus(stored) {
     : row("todo", `Licence + booking reference not saved — optional, only needed for login autofill.`));
 
   listEl.innerHTML = items.join("");
+}
+
+// A plain list of the slots this account's extension has reported over time —
+// proof it's working between alerts.
+async function renderHistory(stored) {
+  const el = document.getElementById("historyList");
+  try {
+    const res = await fetch(`${stored.backendUrl || DEFAULT_BACKEND_URL}/api/watch/history`, {
+      headers: { Authorization: `Bearer ${stored.token}` },
+    });
+    if (!res.ok) throw new Error("failed");
+    const { slots } = await res.json();
+    if (!slots || slots.length === 0) {
+      el.textContent = "Nothing found yet. When Availo detects a matching slot, it'll show up here.";
+      return;
+    }
+    el.innerHTML = slots.map((s) => {
+      const when = new Date(s.slot_datetime).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+      const found = new Date(s.created_at).toLocaleString();
+      return `<div style="padding:6px 0;border-bottom:1px solid var(--line);"><strong>${escapeAttr(s.test_centre)}</strong> — ${when}<br><span style="color:var(--muted);font-size:12px;">found ${found}</span></div>`;
+    }).join("");
+  } catch {
+    el.textContent = "Couldn't load history right now.";
+  }
 }
 
 async function renderRefresh() {
@@ -214,6 +240,31 @@ document.getElementById("signOut").addEventListener("click", async () => {
 });
 
 document.getElementById("saveVault").addEventListener("click", saveVault);
+
+document.getElementById("testAlertBtn").addEventListener("click", async () => {
+  const resultEl = document.getElementById("testAlertResult");
+  const stored = await getStored();
+  if (!stored.token) { resultEl.textContent = "Sign in first."; return; }
+  resultEl.textContent = "Sending a test alert…";
+  try {
+    const res = await fetch(`${stored.backendUrl || DEFAULT_BACKEND_URL}/api/watch/test-alert`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${stored.token}` },
+    });
+    const data = await res.json();
+    if (!res.ok) { resultEl.textContent = `Couldn't send: ${data.error || res.status}`; return; }
+    const parts = [];
+    if (data.email.sent) parts.push(`✓ Email sent to ${stored.email} (check inbox + spam)`);
+    else if (data.email.skipped) parts.push("✗ Email not configured on the server (RESEND_API_KEY missing)");
+    else if (data.email.error) parts.push(`✗ Email failed: ${data.email.error}`);
+    parts.push(data.push.total > 0
+      ? `✓ Push sent to ${data.push.sent}/${data.push.total} device(s)`
+      : "○ No phone/device signed up for push yet (enable it in the dashboard)");
+    resultEl.innerHTML = parts.join("<br>");
+  } catch (err) {
+    resultEl.textContent = `Couldn't reach the backend: ${err.message}`;
+  }
+});
 
 document.getElementById("saveRefresh").addEventListener("click", async () => {
   const enabled = document.getElementById("autoRefreshEnabled").checked;

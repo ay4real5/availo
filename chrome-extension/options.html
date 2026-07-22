@@ -17,7 +17,7 @@
     .card { border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin-top: 16px; }
     .privacy { background: #e4f0ec; border-radius: 8px; padding: 10px 12px; font-size: 12px; color: var(--primary-dark); margin-top: 8px; }
     #status, #vaultStatus { margin-top: 12px; font-size: 13px; }
-    #signedIn, #setupSection, #vaultSection, #refreshSection, #timingSection { display: none; }
+    #signedIn, #setupSection, #vaultSection, #refreshSection, #timingSection, #historySection { display: none; }
     .check { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; margin: 7px 0; }
     .check .mark { flex: 0 0 auto; font-weight: 700; }
     .check .ok { color: var(--primary); }
@@ -56,6 +56,8 @@
     <h2>Your setup</h2>
     <div class="card">
       <div id="setupList"></div>
+      <button id="testAlertBtn" class="link" style="margin-top:12px;">Send me a test alert</button>
+      <div id="testAlertResult" style="font-size:12px;margin-top:6px;color:var(--muted);"></div>
     </div>
   </div>
 
@@ -118,6 +120,14 @@
         <li><strong>About 3 working days before a date</strong> — DVSA's free-cancellation cutoff, when people drop tests they can't make.</li>
       </ul>
       <p class="hint" style="margin-top:10px;">Availo watches continuously while the tab's open — this is just where to concentrate if you're checking by hand.</p>
+    </div>
+  </div>
+
+  <!-- ── What Availo has found: a plain history of detected slots ── -->
+  <div id="historySection">
+    <h2>What Availo has found</h2>
+    <div class="card">
+      <div id="historyList" style="font-size:13px;color:var(--muted);">Loading…</div>
     </div>
   </div>
 

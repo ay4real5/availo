@@ -207,6 +207,63 @@ watchRouter.post("/push/unsubscribe", requireAuth, async (req, res, next) => {
   }
 });
 
+// Send a test alert (email + push) to the signed-in user so they can confirm
+// their own alert channels work, and see the real send result.
+const testAlertLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  keyGenerator: (req) => `test-alert:${req.userId || clientIp(req)}`,
+  message: "Too many test alerts. Please wait a minute.",
+});
+
+watchRouter.post("/test-alert", requireAuth, testAlertLimiter, async (req, res, next) => {
+  try {
+    const { data: user } = await supabase.from("users").select("id, email, name").eq("id", req.userId).single();
+    if (!user) return res.status(404).json({ error: "user_not_found" });
+
+    const { data: prefs } = await supabase.from("user_preferences").select("centre").eq("user_id", req.userId).single();
+    const centre = (prefs && prefs.centre) || "your test centre";
+    const exampleSlot = { slot_datetime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() };
+
+    let email = { skipped: true };
+    try {
+      email = await sendSlotAlert({ to: user.email, userName: user.name, centre, slots: [exampleSlot], test: true });
+    } catch (err) {
+      email = { error: err.message };
+    }
+
+    const push = await sendPushToUser(user.id, {
+      title: "Availo test alert",
+      body: `Your alerts are working. (Example: earlier slot at ${centre}.)`,
+      url: "https://www.gov.uk/change-driving-test",
+    });
+
+    res.json({
+      email: { sent: Boolean(email.id), id: email.id || null, error: email.error || null, skipped: Boolean(email.skipped) },
+      push, // { sent, total }
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Recent slots this user's own extension has detected — a plain "what has it
+// found" history for the options page. Read-only, this user's rows only.
+watchRouter.get("/history", requireAuth, async (req, res, next) => {
+  try {
+    const { data, error } = await supabase
+      .from("available_slots")
+      .select("test_centre, slot_datetime, created_at")
+      .eq("user_id", req.userId)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    if (error) throw error;
+    res.json({ slots: data ?? [] });
+  } catch (err) {
+    next(err);
+  }
+});
+
 const eventsLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 60,
