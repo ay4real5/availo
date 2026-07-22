@@ -3,7 +3,7 @@ import { z } from "zod";
 import { supabase } from "../lib/supabase.js";
 import { logAudit } from "../lib/audit.js";
 import { sendSlotAlert, sendSignedOutEmail } from "../lib/email.js";
-import { sendPush, getVapidPublicKey } from "../lib/push.js";
+import { getVapidPublicKey, sendPushToUser } from "../lib/push.js";
 import { requireAuth } from "./auth.js";
 import { rateLimit, clientIp } from "../middleware/rateLimit.js";
 
@@ -367,26 +367,6 @@ async function sendBackupAlertIfDue(user, testCentre, slot) {
       push_total: pushResult.total,
     },
   });
-}
-
-// Send a push to every subscription this user has registered, pruning any that
-// the push service reports as dead (404/410).
-async function sendPushToUser(userId, payload) {
-  const { data: subs } = await supabase
-    .from("push_subscriptions")
-    .select("*")
-    .eq("user_id", userId);
-
-  const list = subs ?? [];
-  let sent = 0;
-  for (const sub of list) {
-    const result = await sendPush(sub, payload);
-    if (result.ok) sent += 1;
-    if (result.gone) {
-      await supabase.from("push_subscriptions").delete().eq("id", sub.id);
-    }
-  }
-  return { sent, total: list.length };
 }
 
 watchRouter.post("/events", requireAuth, eventsLimiter, async (req, res, next) => {

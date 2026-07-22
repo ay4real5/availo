@@ -287,3 +287,58 @@ export async function sendSignedOutEmail({ to, userName, centre }) {
     return { error: err.message };
   }
 }
+
+// Sent by the Watch Guardian (lib/watchGuardian.js) when a watch's heartbeat
+// goes quiet for several minutes — the laptop likely slept, lost its network,
+// or the tab was closed. This never means DVSA logged them out (that's
+// sendSignedOutEmail above); Availo genuinely doesn't know why it went quiet,
+// so the wording stays honest about that.
+export async function sendWatchStoppedEmail({ to, userName, centre }) {
+  const resend = getResend();
+  if (!resend) {
+    console.log(`[email] RESEND_API_KEY not set — would send watch-stopped notice to ${to}`);
+    return { skipped: true };
+  }
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><title>Availo stopped watching</title></head>
+<body style="margin:0;padding:0;background:#f3f7f2;font-family:arial,sans-serif;color:#232a22;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#2f6f62;">
+    <tr><td style="padding:15px 30px;"><span style="color:#fff;font-size:22px;font-weight:700;">Availo</span></td></tr>
+  </table>
+  <table width="100%" cellpadding="0" cellspacing="0">
+    <tr><td style="padding:30px;">
+      <h1 style="font-size:24px;font-weight:700;margin:0 0 20px;">Availo stopped watching${centre ? ` ${centre}` : ""}</h1>
+      <p style="font-size:16px;margin:0 0 15px;">Hi ${userName || "there"},</p>
+      <p style="font-size:16px;margin:0 0 15px;">
+        Your watch${centre ? ` on <strong>${centre}</strong>` : ""} hasn't checked in for a few minutes.
+        Your laptop may have gone to sleep, lost its connection, or the tab was closed —
+        Availo genuinely isn't sure which. It isn't watching right now.
+      </p>
+      <p style="font-size:16px;margin:0 0 15px;">
+        Reopen the DVSA tab (or wake your laptop) and Availo will pick back up automatically.
+      </p>
+      <p style="margin:0 0 25px;">
+        <a href="https://www.gov.uk/change-driving-test" style="display:inline-block;background:#2f6f62;color:#fff;text-decoration:none;padding:12px 22px;border-radius:999px;font-weight:700;">Open DVSA</a>
+      </p>
+      <p style="font-size:14px;color:#67766c;margin:0;">Availo never books or holds a slot for you — not affiliated with DVSA or GOV.UK.</p>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  try {
+    const { data, error } = await resend.emails.send({
+      from: getFrom(),
+      to,
+      subject: `Availo stopped watching${centre ? ` ${centre}` : ""}`,
+      html,
+    });
+    if (error) return { error };
+    console.log(`[email] Sent watch-stopped notice to ${to} — id=${data.id}`);
+    return { id: data.id };
+  } catch (err) {
+    return { error: err.message };
+  }
+}

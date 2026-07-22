@@ -20,6 +20,7 @@ import { controlRouter } from "./routes/control.js";
 import { watchRouter } from "./routes/watch.js";
 import { metricsHandler } from "./lib/metrics.js";
 import { startSpikeDetector } from "./lib/spikeDetector.js";
+import { startWatchGuardian } from "./lib/watchGuardian.js";
 import { getAuditLog } from "./lib/audit.js";
 import { runScraperForCentre } from "./routes/scraper.js";
 import { sendSlotAlert } from "./lib/email.js";
@@ -207,6 +208,7 @@ app.use("/api/control", controlRouter);
 app.use("/api/watch", watchRouter);
 
 startSpikeDetector();
+startWatchGuardian();
 
 app.use((err, _req, res, _next) => {
   logger.error(err);

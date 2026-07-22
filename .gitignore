@@ -11,6 +11,7 @@ chrome-extension/_smoke-out/
 .env.*
 !.env.example
 .test-store.json
+.test-store-*.json
 dev-store.json
 .debug-store.json
 **/.debug-store.json

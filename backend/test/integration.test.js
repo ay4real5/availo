@@ -6,6 +6,7 @@ import request from "supertest";
 process.env.SCRAPER_API_KEY = "test-key";
 process.env.DEV_STORE_PATH = ".test-store.json";
 process.env.DISABLE_SPIKE_DETECTOR = "true";
+process.env.DISABLE_WATCH_GUARDIAN = "true";
 
 const fs = await import("node:fs");
 const path = await import("node:path");

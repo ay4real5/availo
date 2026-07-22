@@ -1,4 +1,5 @@
 import { logger } from "./logger.js";
+import { supabase } from "./supabase.js";
 
 // Web Push wrapper. Like email (lib/email.js), push is OPTIONAL: if the VAPID
 // keys aren't configured — or the `web-push` package isn't installed — push is
@@ -54,4 +55,26 @@ export async function sendPush(subscription, payload) {
     const gone = err.statusCode === 404 || err.statusCode === 410;
     return { error: err.message, gone };
   }
+}
+
+// Send a push to every subscription a user has registered, pruning any the
+// push service reports as dead (404/410). Shared by every alert path (slot
+// detected, signed out, test alert, watch guardian) so they all behave the
+// same way for a multi-browser/multi-device user.
+export async function sendPushToUser(userId, payload) {
+  const { data: subs } = await supabase
+    .from("push_subscriptions")
+    .select("*")
+    .eq("user_id", userId);
+
+  const list = subs ?? [];
+  let sent = 0;
+  for (const sub of list) {
+    const result = await sendPush(sub, payload);
+    if (result.ok) sent += 1;
+    if (result.gone) {
+      await supabase.from("push_subscriptions").delete().eq("id", sub.id);
+    }
+  }
+  return { sent, total: list.length };
 }
