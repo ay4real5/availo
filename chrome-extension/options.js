@@ -189,6 +189,13 @@ async function renderPrefsSummary(stored) {
     const res = await fetch(`${stored.backendUrl || DEFAULT_BACKEND_URL}/api/auth/preferences`, {
       headers: { Authorization: `Bearer ${stored.token}` },
     });
+    // Stored login token expired — clear it and drop back to the sign-in form.
+    if (res.status === 401) {
+      await chrome.storage.local.remove(["token", "userId"]);
+      statusEl.textContent = "Your session expired — please sign in again.";
+      await renderState();
+      return;
+    }
     if (!res.ok) throw new Error("failed to load preferences");
     const prefs = await res.json();
     if (!prefs) {

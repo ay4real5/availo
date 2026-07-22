@@ -26,7 +26,10 @@ const registerLimiter = rateLimit({
 
 const DEV_JWT_SECRET = "availo-dev-secret-change-in-prod";
 const JWT_SECRET = process.env.JWT_SECRET || DEV_JWT_SECRET;
-const JWT_TTL = "7d";
+// Long-lived: Availo is meant to be left watching for weeks while waiting on a
+// cancellation, so a short session that silently expires and stops everything is
+// a real UX failure. 90 days; the extension also handles expiry gracefully.
+const JWT_TTL = "90d";
 
 if (process.env.NODE_ENV === "production" && (!process.env.JWT_SECRET || JWT_SECRET === DEV_JWT_SECRET)) {
   throw new Error(

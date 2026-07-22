@@ -203,6 +203,15 @@ async function render() {
       appEl.innerHTML = "<p>Starting…</p>";
       const res = await sendToBackground({ type: "START_WATCH", tabId: tab.id });
       if (!res.ok) {
+        if (res.error === "session_expired") {
+          appEl.innerHTML = `<p class="status idle">Your session expired — please sign in again.</p>`;
+          const btn = document.createElement("button");
+          btn.className = "primary";
+          btn.textContent = "Sign in again";
+          btn.addEventListener("click", () => chrome.runtime.openOptionsPage());
+          appEl.appendChild(btn);
+          return;
+        }
         appEl.innerHTML = `<p class="status idle">Couldn't start: ${res.error === "no_preferences_set" ? "set your centre and test date first." : res.error}</p>`;
         return;
       }

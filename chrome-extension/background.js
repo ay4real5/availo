@@ -101,7 +101,16 @@ async function apiFetch(path, { method = "GET", body } = {}) {
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || data.message || `request_failed_${res.status}`);
+  if (!res.ok) {
+    // The stored login token has expired/invalidated — clear it so the UI reverts
+    // to a clean "please sign in again" instead of failing every call. Keep email
+    // + backendUrl so re-signing-in is one field.
+    if (res.status === 401 && /token_invalid_or_expired|unauthenticated/.test(data.error || "")) {
+      await chrome.storage.local.remove(["token", "userId"]);
+      throw new Error("session_expired");
+    }
+    throw new Error(data.error || data.message || `request_failed_${res.status}`);
+  }
   return data;
 }
 
