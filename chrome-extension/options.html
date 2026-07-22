@@ -17,7 +17,13 @@
     .card { border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin-top: 16px; }
     .privacy { background: #e4f0ec; border-radius: 8px; padding: 10px 12px; font-size: 12px; color: var(--primary-dark); margin-top: 8px; }
     #status, #vaultStatus { margin-top: 12px; font-size: 13px; }
-    #signedIn, #vaultSection, #refreshSection { display: none; }
+    #signedIn, #setupSection, #vaultSection, #refreshSection, #timingSection { display: none; }
+    .check { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; margin: 7px 0; }
+    .check .mark { flex: 0 0 auto; font-weight: 700; }
+    .check .ok { color: var(--primary); }
+    .check .no { color: var(--danger); }
+    .check .todo { color: var(--muted); }
+    .check a { color: var(--primary-dark); cursor: pointer; font-weight: 600; }
     a.signout { font-size: 12px; color: var(--danger); cursor: pointer; }
     .row { display: flex; gap: 10px; }
     .row > div { flex: 1; }
@@ -43,6 +49,14 @@
     <p>Signed in as <strong id="signedInEmail"></strong></p>
     <p id="prefsSummary" style="color:#67766c;font-size:13px;"></p>
     <p><a class="signout" id="signOut">Sign out</a></p>
+  </div>
+
+  <!-- ── Setup health check: is everything ready to watch? ── -->
+  <div id="setupSection">
+    <h2>Your setup</h2>
+    <div class="card">
+      <div id="setupList"></div>
+    </div>
   </div>
 
   <!-- ── Your details: used to autofill DVSA's own form fields ── -->
@@ -90,6 +104,20 @@
       <div class="privacy" style="background:#fbeae6;color:#7a2718;">⚠ Refreshing too fast can make DVSA flag your account and cancel your test. Keep this slow (90+ seconds). Availo stops immediately if DVSA ever shows a challenge, and never reserves a slot for you.</div>
       <button id="saveRefresh">Save</button>
       <div id="refreshStatus"></div>
+    </div>
+  </div>
+
+  <!-- ── Best times to watch: concentrate effort where slots actually appear ── -->
+  <div id="timingSection">
+    <h2>Best times to watch</h2>
+    <div class="card">
+      <p style="margin-top:0;">Cancellations aren't random — they cluster. If you can't watch all day, these windows pay off most:</p>
+      <ul style="margin:8px 0 0;padding-left:18px;font-size:13px;line-height:1.55;">
+        <li><strong>Right at 6am</strong> — DVSA reopens overnight and releases fresh slots. Availo pauses at night and auto-resumes then.</li>
+        <li><strong>Weekday evenings</strong> — people rebooking free up their old slot.</li>
+        <li><strong>About 3 working days before a date</strong> — DVSA's free-cancellation cutoff, when people drop tests they can't make.</li>
+      </ul>
+      <p class="hint" style="margin-top:10px;">Availo watches continuously while the tab's open — this is just where to concentrate if you're checking by hand.</p>
     </div>
   </div>
 

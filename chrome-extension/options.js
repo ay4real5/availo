@@ -7,11 +7,15 @@ const REFRESH_KEY = "availoAutoRefresh";
 
 const signedOutEl = document.getElementById("signedOut");
 const signedInEl = document.getElementById("signedIn");
+const setupSectionEl = document.getElementById("setupSection");
 const vaultSectionEl = document.getElementById("vaultSection");
 const refreshSectionEl = document.getElementById("refreshSection");
+const timingSectionEl = document.getElementById("timingSection");
 const statusEl = document.getElementById("status");
 const vaultStatusEl = document.getElementById("vaultStatus");
 const refreshStatusEl = document.getElementById("refreshStatus");
+
+const SIGNED_IN_SECTIONS = [setupSectionEl, vaultSectionEl, refreshSectionEl, timingSectionEl];
 
 async function getStored() {
   return chrome.storage.local.get(["backendUrl", "token", "userId", "email"]);
@@ -24,18 +28,55 @@ async function renderState() {
   if (stored.token) {
     signedOutEl.style.display = "none";
     signedInEl.style.display = "block";
-    vaultSectionEl.style.display = "block";
-    refreshSectionEl.style.display = "block";
+    SIGNED_IN_SECTIONS.forEach((el) => { el.style.display = "block"; });
     document.getElementById("signedInEmail").textContent = stored.email || "";
     await renderVault();
     await renderRefresh();
     await renderPrefsSummary(stored);
+    await renderSetupStatus(stored);
   } else {
     signedOutEl.style.display = "block";
     signedInEl.style.display = "none";
-    vaultSectionEl.style.display = "none";
-    refreshSectionEl.style.display = "none";
+    SIGNED_IN_SECTIONS.forEach((el) => { el.style.display = "none"; });
   }
+}
+
+// A plain checklist of "is everything ready to watch?" — surfaces the exact
+// gaps (no centre, no dates, alerts off) that otherwise leave people stuck.
+async function renderSetupStatus(stored) {
+  const listEl = document.getElementById("setupList");
+  const vault = await AvailoVault.get();
+  let prefs = null;
+  try {
+    const res = await fetch(`${stored.backendUrl || DEFAULT_BACKEND_URL}/api/auth/preferences`, {
+      headers: { Authorization: `Bearer ${stored.token}` },
+    });
+    if (res.ok) prefs = await res.json();
+  } catch { /* offline — show what we can from the vault */ }
+
+  const row = (state, label) => {
+    const mark = state === "ok" ? "✓" : state === "no" ? "✗" : "○";
+    return `<div class="check"><span class="mark ${state}">${mark}</span><span>${label}</span></div>`;
+  };
+
+  const items = [];
+  items.push(row("ok", `Signed in as ${stored.email || "your account"}`));
+  items.push(vault.centre
+    ? row("ok", `Test centre set: <strong>${escapeAttr(vault.centre)}</strong>`)
+    : row("no", `No test centre set yet — add one in “Your details” below.`));
+  const hasWindow = vault.dateFrom || vault.dateTo;
+  items.push(hasWindow
+    ? row("ok", `Alert window set${vault.dateTo ? ` (up to ${new Date(vault.dateTo).toLocaleDateString()})` : ""}.`)
+    : row("todo", `No date window — you'll be alerted for <em>any</em> date at your centre (fine for a first booking).`));
+  items.push((prefs && prefs.notify_email !== false)
+    ? row("ok", `Email alerts on (to ${stored.email || "your account"}).`)
+    : row("todo", `Email alerts off.`));
+  items.push(row("todo", `Phone push: optional — enable it on your phone via the Availo dashboard.`));
+  items.push(AvailoVault.ready(vault)
+    ? row("ok", `Licence + booking reference saved (one-tap autofill enabled).`)
+    : row("todo", `Licence + booking reference not saved — optional, only needed for login autofill.`));
+
+  listEl.innerHTML = items.join("");
 }
 
 async function renderRefresh() {
@@ -112,6 +153,7 @@ async function saveVault() {
   } else {
     vaultStatusEl.textContent = "Saved. Your details stay on this device only.";
   }
+  await renderSetupStatus(await getStored());
   setTimeout(() => { vaultStatusEl.textContent = ""; }, 4000);
 }
 
