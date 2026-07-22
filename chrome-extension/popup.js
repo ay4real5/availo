@@ -51,6 +51,10 @@ function describeWindow(watch) {
 // many are in the user's window).
 function describeStatus(status) {
   if (!status) return "Starting up — checking the page…";
+  // Fully-booked centre: no calendar at all. Reassure rather than show a bare 0.
+  if (status.noAvail && status.total === 0) {
+    return `checked ${formatAgo(status.at)} · this centre has no availability yet — watching for when a slot opens.`;
+  }
   let win;
   if (status.inWindow > 0) {
     const earliest = fmtDay(status.earliest);

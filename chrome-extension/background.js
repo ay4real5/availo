@@ -157,6 +157,7 @@ async function handleWatchMessage(message, sender, sendResponse) {
             soonestOverall: message.soonestOverall || null,
             month: message.month || null,
             centre: message.centre || null,
+            noAvail: Boolean(message.noAvail),
             at: message.at || Date.now(),
           });
         }

@@ -26,6 +26,7 @@ const AvailoResolve = (() => {
         looksLikeQueue: (t) => (typeof looksLikeQueue === "function" ? looksLikeQueue(t) : false),
         looksLoggedOut: (t) => (typeof looksLoggedOut === "function" ? looksLoggedOut(t) : false),
         looksLikeServiceClosed: (t) => (typeof looksLikeServiceClosed === "function" ? looksLikeServiceClosed(t) : false),
+        looksLikeNoAvailability: (t) => (typeof looksLikeNoAvailability === "function" ? looksLikeNoAvailability(t) : false),
         parseReopenTime: (t) => (typeof parseReopenTime === "function" ? parseReopenTime(t) : null),
         labelMatchesKind: (t, k) => (typeof labelMatchesKind === "function" ? labelMatchesKind(t, k) : false),
         buttonMatchesAction: (t, a) => (typeof buttonMatchesAction === "function" ? buttonMatchesAction(t, a) : false),
@@ -100,6 +101,12 @@ const AvailoResolve = (() => {
   // The stated reopening time from the closure page, e.g. "6 am", or null.
   function reopenTime(doc = document) {
     return H.parseReopenTime(bodyText(doc));
+  }
+
+  // A fully-booked centre shows a "no tests available" page instead of a
+  // calendar. NOT an error — keep reloading so we catch the first cancellation.
+  function noAvailability(doc = document) {
+    return H.looksLikeNoAvailability(bodyText(doc));
   }
 
   // Has DVSA signed the user out? True on the sign-in page or a session-expired
@@ -191,7 +198,15 @@ const AvailoResolve = (() => {
     if (clone.querySelectorAll) {
       clone.querySelectorAll(".visuallyhidden, .govuk-visually-hidden, .visually-hidden, [hidden]").forEach((el) => el.remove());
     }
-    const text = (clone.textContent || "").replace(/\s+/g, " ").trim();
+    // Some pages ALSO carry the step label as VISIBLE text, e.g. the "no tests
+    // available" page's header reads "Test centre - Atherton (Manchester)". Strip
+    // a leading "Test centre - " so it still matches the saved centre. Safe: only
+    // a leading "Test centre -" match, so names like "Stoke-on-Trent" are untouched.
+    const text = (clone.textContent || "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/^test\s+centre\s*[-–—:]\s*/i, "")
+      .trim();
     return text || null;
   }
 
@@ -244,7 +259,7 @@ const AvailoResolve = (() => {
     };
   }
 
-  return { page, loginFields, searchFields, resultRows, blocked, queued, loggedOut, serviceClosed, reopenTime, diagnose, pageCentre };
+  return { page, loginFields, searchFields, resultRows, blocked, queued, loggedOut, serviceClosed, reopenTime, noAvailability, diagnose, pageCentre };
 })();
 
 if (typeof module !== "undefined" && module.exports) {

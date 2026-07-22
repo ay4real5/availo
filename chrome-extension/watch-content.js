@@ -175,12 +175,13 @@
       // the popup nudge "nothing in your window, but soonest anywhere is X".
       const soonestOverall = total ? allRows.map((r) => r.datetime).sort()[0] : null;
       const centre = typeof AvailoResolve.pageCentre === "function" ? AvailoResolve.pageCentre(document) : null;
+      const noAvail = typeof AvailoResolve.noAvailability === "function" && AvailoResolve.noAvailability(document);
       const monthEl = document.querySelector(".BookingCalendar-currentMonth");
       const yearEl = document.querySelector(".BookingCalendar-currentYear");
       const month = monthEl
         ? (monthEl.textContent.trim() + (yearEl ? " " + yearEl.textContent.trim() : "")).trim()
         : null;
-      chrome.runtime.sendMessage({ type: "WATCH_STATUS", total, inWindow, earliest, soonestOverall, month, centre, at: Date.now() });
+      chrome.runtime.sendMessage({ type: "WATCH_STATUS", total, inWindow, earliest, soonestOverall, month, centre, noAvail, at: Date.now() });
     } catch { /* status is best-effort */ }
   }
 
@@ -480,6 +481,9 @@
       // to reload it (gently, paced by the background) so we notice the moment it
       // reopens and can resume — a prime time for fresh slots.
       if (AvailoResolve.serviceClosed(document)) { window.location.reload(); return; }
+      // A fully-booked centre shows a "no tests available" page (no calendar).
+      // Keep reloading so we catch the instant a cancellation opens there.
+      if (AvailoResolve.noAvailability(document)) { window.location.reload(); return; }
       if (AvailoResolve.page(document) !== "results") return;
       // Don't reload the page out from under a slot the user is actively acting
       // on — it would reset the scroll/highlight mid-click. Self-clears once the

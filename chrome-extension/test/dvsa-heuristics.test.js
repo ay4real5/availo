@@ -1,8 +1,19 @@
 const test = require("node:test");
 const assert = require("node:assert");
 const {
-  parseSlotDateTime, looksLikeBlock, looksLikeQueue, looksLoggedOut, looksLikeServiceClosed, parseReopenTime, labelMatchesKind, buttonMatchesAction,
+  parseSlotDateTime, looksLikeBlock, looksLikeQueue, looksLoggedOut, looksLikeServiceClosed, looksLikeNoAvailability, parseReopenTime, labelMatchesKind, buttonMatchesAction,
 } = require("../dvsa-heuristics.js");
+
+test("looksLikeNoAvailability: recognises a fully-booked centre's 'no tests' page", () => {
+  // Verbatim from the real page.
+  assert.equal(looksLikeNoAvailability("We have searched all dates in this test centre. There are no tests that meet your requirements. You can search again at a different test centre."), true);
+  assert.equal(looksLikeNoAvailability("There are no tests available"), true);
+});
+
+test("looksLikeNoAvailability: a normal calendar/results page is not 'no availability'", () => {
+  assert.equal(looksLikeNoAvailability("Available tests at Sunderland — July 2026"), false);
+  assert.equal(looksLikeNoAvailability(""), false);
+});
 
 test("looksLikeServiceClosed: recognises DVSA's overnight closure page", () => {
   // Verbatim from the real page.

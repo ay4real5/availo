@@ -112,6 +112,20 @@ function parseReopenTime(text) {
   return m ? m[1].replace(/\s+/g, " ").trim() : null;
 }
 
+// Does this page read like DVSA's "this centre has no tests" result? (Shown
+// instead of a calendar when a centre is fully booked: "We have searched all
+// dates in this test centre. There are no tests that meet your requirements.")
+// NOT an error — keep reloading so we catch the instant a cancellation opens.
+function looksLikeNoAvailability(text) {
+  if (!text || typeof text !== "string") return false;
+  const t = text.toLowerCase();
+  return (
+    /no\s+tests\s+that\s+meet\s+your\s+requirements/.test(t) ||
+    /there\s+are\s+no\s+tests\s+available/.test(t) ||
+    /we\s+have\s+searched\s+all\s+dates\s+in\s+this\s+test\s+centre/.test(t)
+  );
+}
+
 // Does this page read like a DVSA/Queue-it waiting room? A queue is NOT a block:
 // the correct behaviour is to WAIT quietly (never refresh — that loses your
 // place), not to stop watching. Kept separate from looksLikeBlock for that
@@ -179,5 +193,5 @@ function buttonMatchesAction(text, action) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { parseSlotDateTime, looksLikeBlock, looksLikeQueue, looksLoggedOut, looksLikeServiceClosed, parseReopenTime, labelMatchesKind, buttonMatchesAction };
+  module.exports = { parseSlotDateTime, looksLikeBlock, looksLikeQueue, looksLoggedOut, looksLikeServiceClosed, looksLikeNoAvailability, parseReopenTime, labelMatchesKind, buttonMatchesAction };
 }
