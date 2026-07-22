@@ -21,7 +21,6 @@
   let observer = null;
   let rescanTimer = null;
   let scanDebounceTimer = null;
-  let alertedKeys = new Set();
   let activeSelectElement = null;
   let activeSlotInfo = null; // { datetime, centre }
   let offerActiveSince = 0;  // ms timestamp the current slot was offered/revealed
@@ -29,6 +28,7 @@
   let queuedReported = false;
   let serviceClosedState = false; // DVSA's overnight closure, tracked for transitions
   let activeHighlightedKey = null; // which offered slot is currently ringed IN VIEW
+  let lastAlertedSoonestKey = null; // the soonest match we've alerted on (re-alert only when it changes)
 
   ensureHighlightStyle();
 
@@ -121,36 +121,41 @@
     loggedOutReported = false; // back on a real page — re-arm for a future sign-out
 
     const ranked = currentRankedRows();
-    // Forget slots that have left the page so a genuine re-appearance can alert
-    // again — but never re-offer a slot we've already alerted for on this page.
-    const presentKeys = new Set(ranked.map((r) => `${r.centre}|${r.datetime}`));
-    for (const key of [...alertedKeys]) if (!presentKeys.has(key)) alertedKeys.delete(key);
-    // Only ever alert on the SOONEST matching slot, and only once. We re-alert
-    // when the soonest changes — it got taken and a later one is now first, or a
-    // new even-earlier slot appeared — never repeatedly for slots already seen.
-    const soonest = availoPickSoonestUnalerted(ranked, alertedKeys);
-    if (soonest) {
+
+    // Ring EVERY matching slot on screen so the user keeps sight of all their
+    // options — the soonest additionally gets the scroll + banner + alert below.
+    withObserverPaused(() => ringAllMatches(ranked));
+
+    // Alert ONCE, on the SOONEST match. Re-alert only when the soonest CHANGES
+    // (it got taken and a later one is now first, or a new even-earlier one
+    // appeared) — never cycle through each match and land on the latest.
+    const soonest = ranked[0] || null;
+    const soonestKey = soonest ? `${soonest.centre}|${soonest.datetime}` : null;
+    if (soonest && soonestKey !== lastAlertedSoonestKey) {
+      lastAlertedSoonestKey = soonestKey;
       offerSlot(soonest, { count: ranked.length });
+    } else if (!soonest) {
+      lastAlertedSoonestKey = null; // window empty — re-arm for a fresh appearance
+      activeSlotInfo = null;
+      activeHighlightedKey = null;
     }
 
-    // If we've already offered a slot that was in another month, and the user has
-    // now navigated to that month (its cell just became visible), ring it — so
-    // "switch to October" actually pays off without re-alerting.
-    if (activeSlotInfo) {
-      const key = `${activeSlotInfo.centre}|${activeSlotInfo.datetime}`;
-      const cell = findSlotRow(activeSlotInfo.centre, activeSlotInfo.datetime);
+    // If the featured (soonest) slot was in another month and the user has now
+    // navigated to it, ring + scroll to it and swap the banner to the normal view
+    // ("switch to October" → here it is). Re-fetch the cell each scan so it stays
+    // valid across the calendar's month re-renders.
+    if (soonest) {
+      const cell = findSlotRow(soonest.centre, soonest.datetime);
       const el = cell && (cell.selectEl || cell.el);
-      if (el && isVisible(el)) {
-        if (activeHighlightedKey !== key) {
-          activeSelectElement = el;
-          withObserverPaused(() => {
-            highlight(el);
-            showBanner(activeSlotInfo.centre, activeSlotInfo.datetime, { count: ranked.length, visible: true });
-          });
-          activeHighlightedKey = key;
-        }
-      } else {
-        activeHighlightedKey = null; // navigated away / not on screen
+      if (el && isVisible(el) && activeHighlightedKey !== soonestKey) {
+        activeSelectElement = el;
+        withObserverPaused(() => {
+          highlight(el);
+          showBanner(soonest.centre, soonest.datetime, { count: ranked.length, visible: true });
+        });
+        activeHighlightedKey = soonestKey;
+      } else if (el && !isVisible(el)) {
+        activeHighlightedKey = null; // featured slot is off-screen (another month)
       }
     }
 
@@ -190,7 +195,6 @@
   }
 
   function offerSlot(rowInfo, { count = 1 } = {}) {
-    alertedKeys.add(`${rowInfo.centre}|${rowInfo.datetime}`);
     activeSelectElement = rowInfo.selectEl || rowInfo.el;
     activeSlotInfo = { centre: rowInfo.centre, datetime: rowInfo.datetime };
     offerActiveSince = Date.now();
@@ -199,6 +203,7 @@
       type: "SLOT_DETECTED",
       test_centre: rowInfo.centre,
       slot_datetime: new Date(rowInfo.datetime).toISOString(),
+      match_count: count, // total matches in the window (this one is the soonest)
       page_url: window.location.href,
     });
 
@@ -262,6 +267,19 @@
     try { el.focus({ preventScroll: true }); } catch { /* not focusable */ }
   }
 
+  // Ring a cell (add the outline class) without scrolling — used for the extra
+  // matches so the user sees ALL their options, while the soonest also gets the
+  // scroll/focus treatment.
+  function ringCell(el) {
+    if (el) el.classList.add(HIGHLIGHT_CLASS);
+  }
+  function ringAllMatches(ranked) {
+    for (const r of ranked) {
+      const el = r.selectEl || r.el;
+      if (el && isVisible(el)) ringCell(el);
+    }
+  }
+
   // Is the element actually rendered? A slot in a NON-displayed calendar month is
   // present in the DOM but hidden (the SlotPicker only shows one month), so
   // scrolling/ringing it would be invisible. offsetWidth/Height + client rects
@@ -307,7 +325,6 @@
     activeSlotInfo = { centre: target.centre, datetime: target.datetime };
     activeSelectElement = target.selectEl || target.el;
     offerActiveSince = Date.now();
-    alertedKeys.add(`${target.centre}|${target.datetime}`);
 
     chrome.runtime.sendMessage({
       type: "HOLD_CLICKED", // telemetry: "user is going for this slot"
@@ -393,10 +410,10 @@
 
     watching = true;
     prefs = newPrefs;
-    alertedKeys = new Set();
     activeSelectElement = null;
     activeSlotInfo = null;
     activeHighlightedKey = null;
+    lastAlertedSoonestKey = null;
     offerActiveSince = 0;
     loggedOutReported = false;
     queuedReported = false;
@@ -429,6 +446,7 @@
     activeSelectElement = null;
     activeSlotInfo = null;
     activeHighlightedKey = null;
+    lastAlertedSoonestKey = null;
     offerActiveSince = 0;
     if (observer) { observer.disconnect(); observer = null; }
     if (rescanTimer) { clearInterval(rescanTimer); rescanTimer = null; }

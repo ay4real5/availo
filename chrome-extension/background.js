@@ -270,7 +270,7 @@ async function handleWatchMessage(message, sender, sendResponse) {
           slot_datetime: message.slot_datetime,
         });
 
-        notifyDetection(tabId, message.test_centre, message.slot_datetime, watch.personName);
+        notifyDetection(tabId, message.test_centre, message.slot_datetime, watch.personName, message.match_count || 1);
         sendResponse({ ok: true, slotId });
         break;
       }
@@ -422,12 +422,15 @@ async function stopWatch(tabId) {
   } catch { /* best-effort — staleness check covers it */ }
 }
 
-function notifyDetection(tabId, centre, slotDatetime, personName) {
+function notifyDetection(tabId, centre, slotDatetime, personName, matchCount = 1) {
   // Full, friendly date so the month is unmistakable (e.g. "Sat 19 October 2026").
+  // slotDatetime is the SOONEST match; matchCount is how many are in the window.
   const when = new Date(slotDatetime).toLocaleDateString(undefined, {
     weekday: "short", day: "numeric", month: "long", year: "numeric",
   });
   const who = personName ? `${personName}: ` : "";
+  const more = matchCount > 1 ? ` (+${matchCount - 1} more in your window)` : "";
+  const ringed = matchCount > 1 ? "we've highlighted them all" : "we've highlighted it for you";
   // Stable per-tab id so repeat detections update the same toast in place
   // instead of stacking dozens of separate notifications.
   const notificationId = `availo-slot-${tabId}`;
@@ -436,10 +439,10 @@ function notifyDetection(tabId, centre, slotDatetime, personName) {
     type: "basic",
     iconUrl: "icons/icon128.png",
     title: personName ? `Earlier slot for ${personName}!` : "Earlier driving test slot!",
-    message: `${who}${centre} — ${when}. Open DVSA now and click Book — we've highlighted it for you.`,
+    message: `${who}${centre} — earliest is ${when}${more}. Open DVSA now and book — ${ringed}.`,
     priority: 2,
     requireInteraction: true,
-    buttons: [{ title: "Take me to the slot" }],
+    buttons: [{ title: "Take me to the earliest" }],
   });
   chrome.action.setBadgeText({ tabId, text: "!" });
   chrome.action.setBadgeBackgroundColor({ tabId, color: "#e0932a" });
